@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.65rem;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.141 0.005 285.823);
+    --card: 255 255 255;
+    --card-foreground: 0 0 0;
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.141 0.005 285.823);
+    --primary: oklch(0.606 0.25 292.717);
+    --primary-foreground: oklch(0.969 0.016 293.756);
+    --secondary: oklch(0.967 0.001 286.375);
+    --secondary-foreground: oklch(0.21 0.006 285.885);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --accent: oklch(0.967 0.001 286.375);
+    --accent-foreground: oklch(0.21 0.006 285.885);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: 209 213 219;
+    --input: oklch(0.92 0.004 286.32);
+    --ring: oklch(0.606 0.25 292.717);
+    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-2: oklch(0.6 0.118 184.704);
+    --chart-3: oklch(0.398 0.07 227.392);
+    --chart-4: oklch(0.828 0.189 84.429);
+    --chart-5: oklch(0.769 0.188 70.08);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.141 0.005 285.823);
+    --sidebar-primary: oklch(0.606 0.25 292.717);
+    --sidebar-primary-foreground: oklch(0.969 0.016 293.756);
+    --sidebar-accent: oklch(0.967 0.001 286.375);
+    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+    --sidebar-border: oklch(0.92 0.004 286.32);
+    --sidebar-ring: oklch(0.606 0.25 292.717);
+  }
+}
+
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.541 0.281 293.009);
+  --primary-foreground: oklch(0.969 0.016 293.756);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.541 0.281 293.009);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.541 0.281 293.009);
+  --sidebar-primary-foreground: oklch(0.969 0.016 293.756);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.541 0.281 293.009);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @layer components {
+      .gradient-text {
+        @apply bg-gradient-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent;
+      }
+
+      .glass-effect {
+        @apply bg-white backdrop-blur-md border border-purple-500/20;
+      }
+
+      .neon-glow {
+        @apply shadow-lg shadow-purple-500/20;
+      }
+
+      .event-card {
+        @apply bg-white rounded-2xl shadow-lg hover:scale-[1.02] transition-all duration-300 p-6 border border-purple-200 neon-glow hover:shadow-purple-500/30;
+      }
+
+      .btn-primary {
+        @apply bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-full shadow-md transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30;
+      }
+
+      .btn-secondary {
+        @apply bg-white text-purple-600 border border-purple-200 hover:bg-purple-50 font-semibold px-6 py-3 rounded-full shadow-md transition-all duration-200;
+      }
+
+      .search-input {
+        @apply bg-white text-black placeholder:text-gray-400 rounded-2xl border border-purple-200 focus-visible:border-purple-500 focus-visible:ring-0;
+      }
+
+      .select-dropdown {
+        @apply bg-white border border-purple-200 shadow-2xl rounded-2xl overflow-hidden w-40;
+      }
+
+      .select-item {
+        @apply text-black hover:bg-purple-50 focus:bg-purple-100 hover:text-purple-700 focus:text-purple-700 rounded-lg transition-colors;
+      }
+
+      .dark .event-card {
+        @apply bg-white border-purple-200 shadow-purple-500/10;
+      }
+
+      .dark .btn-secondary {
+        @apply bg-white text-purple-600 border-purple-200 hover:bg-purple-50;
+      }
+
+      .dark .select-dropdown {
+        @apply bg-white border-purple-200;
+      }
+
+      .dark .select-item {
+        @apply text-black hover:bg-purple-50 focus:bg-purple-100 hover:text-purple-700 focus:text-purple-700;
+      }
+    }
+    @apply bg-white text-black;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Calendar and Date Input Styles */
+  .rdp {
+    @apply bg-white rounded-lg border border-purple-200 shadow-lg p-3;
+  }
+
+  .rdp-day {
+    @apply text-black hover:bg-purple-50 rounded-full;
+  }
+
+  .rdp-day_selected {
+    @apply bg-purple-600 text-white hover:bg-purple-700;
+  }
+
+  .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+    @apply bg-purple-50;
+  }
+
+  input[type="date"] {
+    @apply bg-white text-black border border-purple-200 rounded-lg px-3 py-2 focus:border-purple-500 focus:ring-0;
+  }
+
+  .calendar-wrapper {
+    @apply bg-white rounded-lg shadow-lg border border-purple-200 p-4;
+  }
+
+  .calendar-header {
+    @apply bg-white text-black border-b border-purple-100 p-2;
+  }
+
+  .calendar-grid {
+    @apply bg-white text-black;
+  }
+
+  .calendar-day {
+    @apply hover:bg-purple-50 text-black;
+  }
+
+  .calendar-day-selected {
+    @apply bg-purple-600 text-white hover:bg-purple-700;
+  }
+
+  .dark .rdp,
+  .dark input[type="date"],
+  .dark .calendar-wrapper,
+  .dark .calendar-header,
+  .dark .calendar-grid {
+    @apply bg-white text-black border-purple-200;
+  }
+}
