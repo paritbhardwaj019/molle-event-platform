@@ -130,7 +130,6 @@ export async function updateSettings(settingsData: Record<string, string>) {
   }
 }
 
-// Helper function to get a specific setting value
 export async function getSetting(key: string, defaultValue: string = "0") {
   try {
     const setting = await db.platformSetting.findUnique({
@@ -144,7 +143,6 @@ export async function getSetting(key: string, defaultValue: string = "0") {
   }
 }
 
-// Function to calculate fees based on a given amount
 export async function calculateFees(amount: number) {
   const platformFeePercentage = parseFloat(
     await getSetting("platform_fee_percentage", "10")
@@ -155,22 +153,32 @@ export async function calculateFees(amount: number) {
   const cgstPercentage = parseFloat(await getSetting("cgst_percentage", "9"));
   const sgstPercentage = parseFloat(await getSetting("sgst_percentage", "9"));
 
-  const platformFee = amount * (platformFeePercentage / 100);
-  const hostFee = platformFee * (hostFeePercentage / 100);
-  const adminFee = platformFee - hostFee;
+  const totalPlatformFee = amount * (platformFeePercentage / 100);
 
-  const cgst = amount * (cgstPercentage / 100);
-  const sgst = amount * (sgstPercentage / 100);
+  const userPlatformFee = totalPlatformFee / 2;
+  const hostPlatformFee = totalPlatformFee / 2;
 
-  const totalAmount = amount + platformFee + cgst + sgst;
+  const hostFee = totalPlatformFee * (hostFeePercentage / 100);
+
+  const adminFee = totalPlatformFee - hostFee;
+
+  const taxableAmount = amount + userPlatformFee;
+  const cgst = taxableAmount * (cgstPercentage / 100);
+  const sgst = taxableAmount * (sgstPercentage / 100);
+
+  const userPays = amount + userPlatformFee + cgst + sgst;
+  const hostGets = amount - hostPlatformFee;
 
   return {
     baseAmount: amount,
-    platformFee,
+    totalPlatformFee,
+    userPlatformFee,
+    hostPlatformFee,
     hostFee,
     adminFee,
     cgst,
     sgst,
-    totalAmount,
+    userPays,
+    hostGets,
   };
 }

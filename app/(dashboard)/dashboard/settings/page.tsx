@@ -109,10 +109,23 @@ export default function SettingsPage() {
   const platformFee =
     parseFloat(formValues["platform_fee_percentage"] || "0") || 0;
   const hostFee = parseFloat(formValues["host_fee_percentage"] || "0") || 0;
+  const cgstPercentage = parseFloat(formValues["cgst_percentage"] || "0") || 0;
+  const sgstPercentage = parseFloat(formValues["sgst_percentage"] || "0") || 0;
 
-  const userPays = ticketPrice * (1 + platformFee / 100);
-  const hostEarns = ((ticketPrice * platformFee) / 100) * (hostFee / 100);
-  const adminEarns = (ticketPrice * platformFee) / 100 - hostEarns;
+  // Calculate fees using the new model
+  const totalPlatformFee = ticketPrice * (platformFee / 100);
+  const userPlatformFee = totalPlatformFee / 2;
+  const hostPlatformFee = totalPlatformFee / 2;
+  const hostShare = totalPlatformFee * (hostFee / 100);
+  const adminShare = totalPlatformFee - hostShare;
+
+  // Calculate taxes on base amount plus user's platform fee share
+  const taxableAmount = ticketPrice + userPlatformFee;
+  const cgst = taxableAmount * (cgstPercentage / 100);
+  const sgst = taxableAmount * (sgstPercentage / 100);
+
+  const userPays = ticketPrice + userPlatformFee + cgst + sgst;
+  const hostGets = ticketPrice - hostPlatformFee;
 
   return (
     <div className="flex flex-col gap-8 p-8">
@@ -200,26 +213,46 @@ export default function SettingsPage() {
                   <div className="flex justify-between text-sm">
                     <span>Platform Fee ({platformFee}%)</span>
                     <span className="font-medium">
-                      ₹{((ticketPrice * platformFee) / 100).toFixed(2)}
+                      ₹{totalPlatformFee.toFixed(2)}
                     </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>• User's Share (50%)</span>
+                    <span>₹{userPlatformFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>• Host's Share (50%)</span>
+                    <span>₹{hostPlatformFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>CGST ({cgstPercentage}%)</span>
+                    <span className="font-medium">₹{cgst.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>SGST ({sgstPercentage}%)</span>
+                    <span className="font-medium">₹{sgst.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-gray-200 my-2"></div>
                   <div className="flex justify-between font-medium">
                     <span>User Pays</span>
                     <span>₹{userPays.toFixed(2)}</span>
                   </div>
+                  <div className="flex justify-between font-medium">
+                    <span>Host Gets</span>
+                    <span>₹{hostGets.toFixed(2)}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-2 border-t border-gray-200 pt-4">
-                  <h3 className="font-medium">Revenue Distribution</h3>
+                  <h3 className="font-medium">Platform Fee Distribution</h3>
                   <div className="flex justify-between text-sm">
-                    <span>Host Earnings ({hostFee}% of platform fee)</span>
-                    <span className="font-medium">₹{hostEarns.toFixed(2)}</span>
+                    <span>Host's Share ({hostFee}% of platform fee)</span>
+                    <span className="font-medium">₹{hostShare.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Platform Earnings</span>
+                    <span>Platform's Share</span>
                     <span className="font-medium">
-                      ₹{adminEarns.toFixed(2)}
+                      ₹{adminShare.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -229,10 +262,14 @@ export default function SettingsPage() {
                     Understanding the Fee Structure
                   </h3>
                   <p className="text-sm text-blue-600">
-                    The platform fee is added on top of the ticket price. A
-                    portion of this fee is shared with hosts based on the host
-                    fee percentage. Tax rates (CGST & SGST) are applied to the
-                    total amount.
+                    The platform fee is split equally between the user and host.
+                    For example, with a 10% platform fee on a ₹100 ticket:
+                    <br />• User pays ₹5 extra (50% of platform fee)
+                    <br />• Host contributes ₹5 (50% of platform fee)
+                    <br />• Host receives a portion of the total platform fee
+                    based on the host fee percentage
+                    <br />• CGST and SGST are applied to the base amount plus
+                    user's platform fee share
                   </p>
                 </div>
               </div>

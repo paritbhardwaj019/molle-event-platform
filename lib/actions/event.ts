@@ -124,7 +124,11 @@ export async function createEvent(data: EventFormData) {
   }
 }
 
-export async function getAllEvents() {
+export async function getAllEvents({
+  isFeatured,
+}: {
+  isFeatured?: boolean;
+} = {}) {
   try {
     const events = await db.event.findMany({
       include: {
@@ -138,6 +142,9 @@ export async function getAllEvents() {
       },
       orderBy: {
         createdAt: "desc",
+      },
+      where: {
+        ...(isFeatured ? { isFeatured: true } : {}),
       },
     });
 
@@ -321,5 +328,43 @@ export async function getEventPackages(eventId: string) {
       success: false,
       error: "Failed to fetch packages",
     };
+  }
+}
+
+export async function updateEventFeaturedStatus(
+  eventId: string,
+  isFeatured: boolean
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to update event status",
+      };
+    }
+
+    // Check if user is admin
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+    });
+
+    if (!user || user.role !== "ADMIN") {
+      return {
+        success: false,
+        error: "Only admins can update featured status",
+      };
+    }
+
+    const event = await db.event.update({
+      where: { id: eventId },
+      data: { isFeatured },
+    });
+
+    revalidatePath("/events");
+    return { success: true, data: event };
+  } catch (error) {
+    console.error("Error updating event featured status:", error);
+    return { success: false, error: "Failed to update featured status" };
   }
 }

@@ -264,8 +264,9 @@ export default function EventDetailPage({
                   src={event.coverImage || "/placeholder.svg"}
                   alt={event.title}
                   width={800}
-                  height={400}
-                  className="w-full h-64 md:h-96 object-cover"
+                  height={500}
+                  className="w-full h-full object-cover"
+                  priority
                 />
               </div>
             </div>

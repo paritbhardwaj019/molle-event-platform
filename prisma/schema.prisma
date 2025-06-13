@@ -71,6 +71,8 @@ model User {
   name          String
   phone         String?
   avatar        String?
+  birthday      DateTime?
+  identity      String?
   role          UserRole    @default(USER)
   status        UserStatus  @default(ACTIVE)
   emailVerified DateTime?
@@ -103,6 +105,10 @@ model User {
   
   hostReferrerCodes  HostReferrerCode[] @relation("HostReferrerCodes")
   usedReferrerCode   HostReferrerCode?  @relation("ReferrerUsers", fields: [usedReferrerCodeId], references: [id])
+  
+  hostConversations  Conversation[]     @relation("HostConversations")
+  adminConversations Conversation[]     @relation("AdminConversations")
+  sentMessages       Message[]          @relation("SentMessages")
   
   @@map("users")
 }
@@ -154,6 +160,7 @@ model Event {
   slug          String      @unique
   eventType     EventType   @default(NORMAL)
   status        EventStatus @default(DRAFT)
+  isFeatured    Boolean     @default(false)
   
   minAge        Int?
   maxAge        Int?
@@ -370,7 +377,18 @@ model HostReferrerCode {
   referrers     User[]      @relation("ReferrerUsers")
   
   @@map("host_referrer_codes")
-} 
+}
+
+model City {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  state       String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("cities")
+}
 
 model PlatformSetting {
   id               String   @id @default(cuid())
@@ -382,4 +400,36 @@ model PlatformSetting {
   updatedAt        DateTime @updatedAt
   
   @@map("platform_settings")
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  hostId      String
+  adminId     String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  host        User     @relation("HostConversations", fields: [hostId], references: [id])
+  admin       User     @relation("AdminConversations", fields: [adminId], references: [id])
+  messages    Message[]
+  
+  @@unique([hostId, adminId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  content        String   @db.Text
+  senderId       String
+  conversationId String
+  isRead         Boolean  @default(false)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
 }

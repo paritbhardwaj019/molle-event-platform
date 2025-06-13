@@ -17,9 +17,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Copy, Trash2, Eye } from "lucide-react";
+import { Copy, Trash2, Eye, Star } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getAllEvents, deleteEvent } from "@/lib/actions/event";
+import {
+  getAllEvents,
+  deleteEvent,
+  updateEventFeaturedStatus,
+} from "@/lib/actions/event";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -48,6 +52,7 @@ interface Event {
   soldTickets: number;
   bookings: any[];
   slug: string;
+  isFeatured: boolean;
 }
 
 const truncateText = (text: string, maxLength: number) => {
@@ -61,6 +66,7 @@ export function EventsTable() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -124,6 +130,35 @@ export function EventsTable() {
       toast.error("An error occurred while deleting the event");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleFeatured = async (
+    eventId: string,
+    currentStatus: boolean
+  ) => {
+    try {
+      setIsUpdating(true);
+      const result = await updateEventFeaturedStatus(eventId, !currentStatus);
+
+      if (result.success) {
+        setEvents((prevEvents) =>
+          prevEvents.map((event) =>
+            event.id === eventId
+              ? { ...event, isFeatured: !currentStatus }
+              : event
+          )
+        );
+        toast.success(
+          `Event ${!currentStatus ? "featured" : "unfeatured"} successfully`
+        );
+      } else {
+        toast.error(result.error || "Failed to update featured status");
+      }
+    } catch (error) {
+      toast.error("An error occurred while updating featured status");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -288,13 +323,25 @@ export function EventsTable() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                          className={`h-8 w-8 ${
+                            event.isFeatured
+                              ? "text-yellow-500 hover:text-yellow-600"
+                              : "text-gray-400 hover:text-gray-600"
+                          } hover:bg-gray-50`}
+                          onClick={() =>
+                            handleToggleFeatured(event.id, event.isFeatured)
+                          }
+                          disabled={isUpdating}
                         >
-                          <Eye className="h-4 w-4" />
+                          <Star className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>View event details</p>
+                        <p>
+                          {event.isFeatured
+                            ? "Unfeature event"
+                            : "Feature event"}
+                        </p>
                       </TooltipContent>
                     </Tooltip>
 

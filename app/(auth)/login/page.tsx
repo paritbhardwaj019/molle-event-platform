@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { login } from "@/lib/actions/auth";
 import { auth } from "@/lib/auth";
 
-export default function LoginPage() {
+function LoginContent() {
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -303,5 +303,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+          <p className="text-white">Loading...</p>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

@@ -10,12 +10,23 @@ import { toast } from "sonner";
 import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
 import { Loader2, ChevronLeft } from "lucide-react";
 import Script from "next/script";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { calculateFees } from "@/lib/actions/settings";
 
 type BookingStep = "packages" | "confirmation";
+
+interface TicketHolder {
+  name: string;
+  age: string;
+  phone: string;
+}
 
 interface PackageSelection {
   packageId: string;
   quantity: number;
+  ticketHolders: TicketHolder[];
 }
 
 export default function BookingPage() {
@@ -32,6 +43,7 @@ export default function BookingPage() {
   const [isLoadingPackages, setIsLoadingPackages] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [fees, setFees] = useState<any>(null);
 
   useEffect(() => {
     async function fetchEvent() {
@@ -97,12 +109,34 @@ export default function BookingPage() {
     }
   };
 
-  const handleNextStep = () => {
+  const calculateTotalFees = async (baseAmount: number) => {
+    const calculatedFees = await calculateFees(baseAmount);
+    setFees(calculatedFees);
+    return calculatedFees;
+  };
+
+  const handleNextStep = async () => {
     if (currentStep === "packages") {
       if (selectedPackages.length === 0) {
         toast.error("Please select at least one package");
         return;
       }
+
+      // Validate ticket holder details
+      const hasEmptyFields = selectedPackages.some((pkg) =>
+        pkg.ticketHolders.some(
+          (holder) => !holder.name || !holder.age || !holder.phone
+        )
+      );
+
+      if (hasEmptyFields) {
+        toast.error("Please fill in all ticket holder details");
+        return;
+      }
+
+      // Calculate fees before proceeding
+      const baseAmount = getTotalAmount();
+      await calculateTotalFees(baseAmount);
       setCurrentStep("confirmation");
     }
   };
@@ -116,6 +150,72 @@ export default function BookingPage() {
 
   const getBookingFee = () => {
     return getTotalAmount() * 0.02; // 2% booking fee
+  };
+
+  // Helper: Get total selected tickets globally
+  const getTotalSelectedTickets = () =>
+    selectedPackages.reduce((sum, s) => sum + s.quantity, 0);
+
+  // Helper: Get max tickets for the event
+  const getEventMaxTickets = () => event?.maxTickets || 0;
+
+  const handleTicketHolderChange = (
+    packageId: string,
+    index: number,
+    field: keyof TicketHolder,
+    value: string
+  ) => {
+    setSelectedPackages((prev) =>
+      prev.map((pkg) => {
+        if (pkg.packageId === packageId) {
+          const updatedHolders = [...pkg.ticketHolders];
+          updatedHolders[index] = { ...updatedHolders[index], [field]: value };
+          return { ...pkg, ticketHolders: updatedHolders };
+        }
+        return pkg;
+      })
+    );
+  };
+
+  const handleIncrement = (pkg: any) => {
+    const globalMax = getEventMaxTickets();
+    const totalSelected = getTotalSelectedTickets();
+    const current =
+      selectedPackages.find((s) => s.packageId === pkg.id)?.quantity || 0;
+    const perPackageMax = pkg.maxTickets || 999;
+    if (totalSelected < globalMax && current < perPackageMax) {
+      setSelectedPackages([
+        ...selectedPackages.filter((s) => s.packageId !== pkg.id),
+        {
+          packageId: pkg.id,
+          quantity: current + 1,
+          ticketHolders: [...Array(current + 1)].map(() => ({
+            name: "",
+            age: "",
+            phone: "",
+          })),
+        },
+      ]);
+    }
+  };
+
+  const handleDecrement = (pkg: any) => {
+    const current =
+      selectedPackages.find((s) => s.packageId === pkg.id)?.quantity || 0;
+    if (current > 0) {
+      setSelectedPackages([
+        ...selectedPackages.filter((s) => s.packageId !== pkg.id),
+        {
+          packageId: pkg.id,
+          quantity: current - 1,
+          ticketHolders: [...Array(current - 1)].map(() => ({
+            name: "",
+            age: "",
+            phone: "",
+          })),
+        },
+      ]);
+    }
   };
 
   const handlePayment = async () => {
@@ -133,7 +233,7 @@ export default function BookingPage() {
         eventId: event.id,
         packageId: selectedPackages[0].packageId,
         ticketCount: totalTickets,
-        totalAmount: getTotalAmount() + getBookingFee(),
+        totalAmount: fees.userPays,
         referralCode: referralCode || undefined,
       });
 
@@ -246,52 +346,164 @@ export default function BookingPage() {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-4">
-                {packages.map((pkg: any) => (
-                  <Card key={pkg.id} className="p-4">
-                    <div className="text-white">
-                      <div className="flex justify-between items-start mb-4">
+                {packages.map((pkg: any) => {
+                  const selected =
+                    selectedPackages.find((s) => s.packageId === pkg.id)
+                      ?.quantity || 0;
+                  const globalMax = getEventMaxTickets();
+                  const totalSelected = getTotalSelectedTickets();
+                  const perPackageMax = pkg.maxTickets || 999;
+                  const canIncrement =
+                    totalSelected < globalMax && selected < perPackageMax;
+                  const currentPackage = selectedPackages.find(
+                    (s) => s.packageId === pkg.id
+                  );
+
+                  return (
+                    <Card
+                      key={pkg.id}
+                      className="p-6 bg-white flex flex-col gap-4"
+                    >
+                      <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="text-lg font-semibold">{pkg.name}</h3>
-                          <p className="text-sm text-muted-foreground">
+                          <h3 className="text-lg font-semibold text-black">
+                            {pkg.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground text-gray-500">
                             {pkg.description}
                           </p>
                         </div>
-                        <div className="text-lg font-semibold">
+                        <div className="text-lg font-semibold text-black">
                           ₹{pkg.price.toFixed(2)}
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-4 mt-4">
-                        <label className="text-sm">Quantity:</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={pkg.maxTickets || 999}
-                          value={
-                            selectedPackages.find((s) => s.packageId === pkg.id)
-                              ?.quantity || 0
-                          }
-                          onChange={(e) =>
-                            handlePackageSelectionChange([
-                              ...selectedPackages.filter(
-                                (s) => s.packageId !== pkg.id
-                              ),
-                              {
-                                packageId: pkg.id,
-                                quantity: parseInt(e.target.value) || 0,
-                              },
-                            ])
-                          }
-                          className="w-20 px-2 py-1 bg-background border rounded-md"
-                        />
+                      <div className="flex items-center gap-4 mt-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          Quantity
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="w-8 h-8 px-0 hover:bg-gray-100 transition-colors"
+                            onClick={() => handleDecrement(pkg)}
+                            disabled={selected === 0}
+                          >
+                            -
+                          </Button>
+                          <span className="w-8 text-center font-medium text-black">
+                            {selected}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="w-8 h-8 px-0 hover:bg-gray-100 transition-colors"
+                            onClick={() => handleIncrement(pkg)}
+                            disabled={!canIncrement}
+                          >
+                            +
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-1.5 ml-2">
+                          <span className="text-xs text-gray-500">Max</span>
+                          <span className="text-xs font-medium text-gray-700">
+                            {perPackageMax}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            per booking
+                          </span>
+                        </div>
                       </div>
 
-                      {pkg.benefits && pkg.benefits.length > 0 && (
-                        <div className="mt-4">
-                          <h4 className="text-sm font-medium mb-2">
-                            Includes:
+                      {selected > 0 && (
+                        <div className="mt-4 space-y-4">
+                          <h4 className="text-sm font-medium text-gray-700">
+                            Ticket Holder Details
                           </h4>
-                          <ul className="list-disc list-inside text-sm text-muted-foreground">
+                          {currentPackage?.ticketHolders.map(
+                            (holder, index) => (
+                              <div
+                                key={index}
+                                className="space-y-3 p-3 bg-gray-50 rounded-lg"
+                              >
+                                <h5 className="text-sm font-medium text-gray-600">
+                                  Ticket {index + 1}
+                                </h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-2">
+                                    <Label htmlFor={`name-${pkg.id}-${index}`}>
+                                      Name
+                                    </Label>
+                                    <Input
+                                      id={`name-${pkg.id}-${index}`}
+                                      value={holder.name}
+                                      onChange={(e) =>
+                                        handleTicketHolderChange(
+                                          pkg.id,
+                                          index,
+                                          "name",
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="Full name"
+                                      className="bg-white"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor={`age-${pkg.id}-${index}`}>
+                                      Age
+                                    </Label>
+                                    <Input
+                                      id={`age-${pkg.id}-${index}`}
+                                      type="number"
+                                      value={holder.age}
+                                      onChange={(e) =>
+                                        handleTicketHolderChange(
+                                          pkg.id,
+                                          index,
+                                          "age",
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="Age"
+                                      className="bg-white"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`phone-${pkg.id}-${index}`}>
+                                    Phone Number
+                                  </Label>
+                                  <Input
+                                    id={`phone-${pkg.id}-${index}`}
+                                    type="tel"
+                                    value={holder.phone}
+                                    onChange={(e) =>
+                                      handleTicketHolderChange(
+                                        pkg.id,
+                                        index,
+                                        "phone",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Phone number"
+                                    className="bg-white"
+                                  />
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )}
+
+                      {pkg.benefits && pkg.benefits.length > 0 && (
+                        <div className="mt-2">
+                          <h4 className="text-sm font-medium mb-1 text-gray-500">
+                            Includes
+                          </h4>
+                          <ul className="list-disc list-inside text-sm text-gray-500">
                             {pkg.benefits.map(
                               (benefit: string, index: number) => (
                                 <li key={index}>{benefit}</li>
@@ -300,9 +512,9 @@ export default function BookingPage() {
                           </ul>
                         </div>
                       )}
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -311,11 +523,11 @@ export default function BookingPage() {
         {/* Confirmation Step */}
         {currentStep === "confirmation" && (
           <div className="max-w-2xl mx-auto">
-            <Card className="p-6 mb-6">
-              <div className="space-y-6 text-white">
+            <Card className="p-6 mb-6 bg-white">
+              <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">
-                    Selected Packages
+                  <h3 className="text-xl font-semibold mb-4 text-gray-900">
+                    Booking Summary
                   </h3>
                   {selectedPackages.map((selection) => {
                     const pkg = packages.find(
@@ -323,36 +535,83 @@ export default function BookingPage() {
                     );
                     if (!pkg) return null;
                     return (
-                      <div
-                        key={pkg.id}
-                        className="flex justify-between items-center py-2 border-b border-white/10"
-                      >
-                        <div>
-                          <p className="font-medium">{pkg.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Quantity: {selection.quantity}
+                      <div key={pkg.id} className="mb-6">
+                        <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {pkg.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Quantity - {selection.quantity}
+                            </p>
+                          </div>
+                          <p className="font-medium text-gray-900">
+                            ₹{(pkg.price * selection.quantity).toFixed(2)}
                           </p>
                         </div>
-                        <p className="font-medium">
-                          ₹{(pkg.price * selection.quantity).toFixed(2)}
-                        </p>
+
+                        <div className="mt-4 space-y-3">
+                          <h4 className="text-sm font-medium text-gray-700">
+                            Ticket Holders
+                          </h4>
+                          {selection.ticketHolders.map((holder, index) => (
+                            <div
+                              key={index}
+                              className="p-3 bg-gray-50 rounded-lg"
+                            >
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-sm text-gray-500">Name</p>
+                                  <p className="font-medium text-gray-900">
+                                    {holder.name}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-500">Age</p>
+                                  <p className="font-medium text-gray-900">
+                                    {holder.age}
+                                  </p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-500">Phone</p>
+                                  <p className="font-medium text-gray-900">
+                                    {holder.phone}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="pt-4 space-y-2">
-                  <div className="flex justify-between">
-                    <p>Sub-total</p>
-                    <p>₹{getTotalAmount().toFixed(2)}</p>
+                <Separator className="my-6" />
+
+                <div className="space-y-3">
+                  <div className="flex justify-between text-gray-600">
+                    <p>Base Amount</p>
+                    <p>₹{fees?.baseAmount.toFixed(2)}</p>
                   </div>
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <p>Booking Fee</p>
-                    <p>₹{getBookingFee().toFixed(2)}</p>
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <p>Platform Fee</p>
+                    <p>₹{fees?.totalPlatformFee.toFixed(2)}</p>
                   </div>
-                  <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/10">
-                    <p>Total Amount</p>
-                    <p>₹{(getTotalAmount() + getBookingFee()).toFixed(2)}</p>
+                  <div className="flex justify-between text-sm">
+                    <p>CGST ({fees?.cgstPercentage}%)</p>
+                    <p>₹{fees?.cgst.toFixed(2)}</p>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <p>SGST ({fees?.sgstPercentage}%)</p>
+                    <p>₹{fees?.sgst.toFixed(2)}</p>
+                  </div>
+                  <div className="border-t border-gray-200 my-2"></div>
+                  <div className="flex justify-between text-lg font-semibold">
+                    <p className="text-gray-900">Total Amount</p>
+                    <p className="text-gray-900">
+                      ₹{fees?.userPays.toFixed(2)}
+                    </p>
                   </div>
                 </div>
               </div>

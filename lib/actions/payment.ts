@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import { calculateFees } from "./settings";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID!,
@@ -25,6 +26,20 @@ export async function createBookingWithPayment(data: CreateBookingData) {
     if (!session?.user) {
       return { error: "Unauthorized" };
     }
+
+    // Get event details to find the host
+    const event = await db.event.findUnique({
+      where: { id: data.eventId },
+      include: { host: true },
+    });
+
+    if (!event) {
+      return { error: "Event not found" };
+    }
+
+    // Calculate fees based on the base amount
+    const baseAmount = Number(data.totalAmount);
+    const fees = await calculateFees(baseAmount);
 
     // If referral code is provided, validate it
     let referralLinkId: string | null = null;
@@ -74,6 +89,9 @@ export async function createBookingWithPayment(data: CreateBookingData) {
         eventId: data.eventId,
         userId: session.user.id,
         referralCode: data.referralCode || "",
+        baseAmount: baseAmount,
+        platformFee: fees.totalPlatformFee,
+        hostFee: fees.hostFee,
       },
     } as const;
 
@@ -142,6 +160,11 @@ export async function verifyPayment(
         booking: {
           include: {
             user: true,
+            event: {
+              include: {
+                host: true,
+              },
+            },
             referralLink: {
               include: {
                 referrer: true,
@@ -161,11 +184,22 @@ export async function verifyPayment(
       },
     });
 
-    // Handle referral reward and create referral record if applicable
-    if (payment.booking.referralLink?.referrer) {
-      const referralAmount = Number(payment.amount) * 0.03; // 3% referral reward
+    // Calculate fees for this payment
+    const baseAmount = Number(payment.amount);
+    const fees = await calculateFees(baseAmount);
 
-      // Update referrer's wallet balance
+    await db.user.update({
+      where: { id: payment.booking.event.host.id },
+      data: {
+        walletBalance: {
+          increment: Number(fees.hostGets),
+        },
+      },
+    });
+
+    if (payment.booking.referralLink?.referrer) {
+      const referralAmount = Number(fees.hostGets) * 0.03;
+
       await db.user.update({
         where: { id: payment.booking.referralLink.referrer.id },
         data: {
@@ -175,7 +209,15 @@ export async function verifyPayment(
         },
       });
 
-      // Check if a referral record already exists for this user and referrer
+      await db.user.update({
+        where: { id: payment.booking.event.host.id },
+        data: {
+          walletBalance: {
+            decrement: referralAmount,
+          },
+        },
+      });
+
       const existingReferral = await db.referral.findFirst({
         where: {
           referrerId: payment.booking.referralLink.referrer.id,

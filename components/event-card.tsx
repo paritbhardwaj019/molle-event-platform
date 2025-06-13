@@ -42,9 +42,10 @@ export function EventCard({ event }: EventCardProps) {
           <Image
             src={event.image || "/placeholder.svg"}
             alt={event.title}
-            width={400}
-            height={250}
+            width={800}
+            height={500}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            priority
           />
           {event.type === "invite-only" && (
             <Badge className="absolute top-3 right-3 bg-accent/90 text-black font-semibold backdrop-blur-sm">

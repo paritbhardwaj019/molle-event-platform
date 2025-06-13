@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -15,7 +15,7 @@ import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
 import { signup, googleSignIn } from "@/lib/actions/auth";
 import { UserRole } from "@prisma/client";
 
-export default function AffiliatePage() {
+function AffiliateContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -472,5 +472,19 @@ export default function AffiliatePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AffiliatePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+          <p className="text-white">Loading...</p>
+        </div>
+      }
+    >
+      <AffiliateContent />
+    </Suspense>
   );
 }

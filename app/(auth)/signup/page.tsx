@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -21,7 +21,7 @@ import { PasswordStrength } from "@/components/ui/password-strength";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
 import { signup, googleSignIn } from "@/lib/actions/auth";
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string>();
@@ -329,5 +329,19 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+          <p className="text-white">Loading...</p>
+        </div>
+      }
+    >
+      <SignupContent />
+    </Suspense>
   );
 }

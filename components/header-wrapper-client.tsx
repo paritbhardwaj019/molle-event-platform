@@ -22,6 +22,8 @@ export function HeaderWrapperClient() {
     "/dashboard/referrer-codes",
     "/dashboard/hosts",
     "/dashboard/settings",
+    "/dashboard/cities",
+    "/dashboard/messages",
   ];
 
   if (pathnames.includes(pathname)) {

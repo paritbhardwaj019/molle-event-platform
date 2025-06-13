@@ -77,7 +77,9 @@ export const metadata: Metadata = {
 };
 
 async function getRecommendedEvents() {
-  const result = await getAllEvents();
+  const result = await getAllEvents({
+    isFeatured: true,
+  });
   if (!result.success || !result.data) {
     return [];
   }

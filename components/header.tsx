@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, MapPin, Menu, X, LogOut, User } from "lucide-react";
+import { Search, MapPin, Menu, X, LogOut, User, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,10 +23,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getActiveCities } from "@/lib/actions/city";
+import type { City } from "@/lib/actions/city";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
+  const [selectedCity, setSelectedCity] = useState("mumbai");
   const { user, isAuthenticated, logoutUser } = useLoggedInUser();
+
+  useEffect(() => {
+    const fetchCities = async () => {
+      const result = await getActiveCities();
+      if (result.success && result.data) {
+        setCities(result.data);
+      }
+    };
+    fetchCities();
+  }, []);
 
   return (
     <header className="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-800 text-white sticky top-0 z-50 shadow-xl backdrop-blur-sm">
@@ -50,23 +64,20 @@ export function Header() {
           <div className="hidden md:flex items-center space-x-8">
             <div className="flex items-center space-x-2 bg-white/10 rounded-full px-4 py-2 hover:bg-white/20 transition-colors">
               <MapPin className="w-4 h-4 text-white/90" />
-              <Select defaultValue="mumbai">
+              <Select value={selectedCity} onValueChange={setSelectedCity}>
                 <SelectTrigger className="border-none bg-transparent text-white hover:bg-transparent h-auto p-0 gap-2 [&>svg]:hidden focus:ring-0">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="select-dropdown">
-                  <SelectItem value="mumbai" className="select-item">
-                    Mumbai
-                  </SelectItem>
-                  <SelectItem value="delhi" className="select-item">
-                    Delhi
-                  </SelectItem>
-                  <SelectItem value="bangalore" className="select-item">
-                    Bangalore
-                  </SelectItem>
-                  <SelectItem value="pune" className="select-item">
-                    Pune
-                  </SelectItem>
+                <SelectContent className="select-dropdown max-h-60 overflow-y-auto">
+                  {cities.map((city) => (
+                    <SelectItem
+                      key={city.id}
+                      value={city.name.toLowerCase().replace(/\s+/g, "-")}
+                      className="select-item"
+                    >
+                      {city.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -141,11 +152,11 @@ export function Header() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link
-                      href="/profile"
+                      href="/bookings"
                       className="cursor-pointer text-gray-700 hover:text-purple-600 hover:bg-purple-50"
                     >
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
+                      <Calendar className="mr-2 h-4 w-4" />
+                      My Bookings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -196,23 +207,23 @@ export function Header() {
 
               {/* Mobile Location */}
               <div className="bg-white/10 rounded-2xl p-3">
-                <Select defaultValue="mumbai">
+                <Select value={selectedCity} onValueChange={setSelectedCity}>
                   <SelectTrigger className="bg-transparent border-none text-white rounded-full h-auto">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
                       <SelectValue />
                     </div>
                   </SelectTrigger>
-                  <SelectContent className="select-dropdown">
-                    <SelectItem value="mumbai" className="select-item">
-                      Mumbai
-                    </SelectItem>
-                    <SelectItem value="delhi" className="select-item">
-                      Delhi
-                    </SelectItem>
-                    <SelectItem value="bangalore" className="select-item">
-                      Bangalore
-                    </SelectItem>
+                  <SelectContent className="select-dropdown max-h-60 overflow-y-auto">
+                    {cities.map((city) => (
+                      <SelectItem
+                        key={city.id}
+                        value={city.name.toLowerCase().replace(/\s+/g, "-")}
+                        className="select-item"
+                      >
+                        {city.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -240,10 +251,10 @@ export function Header() {
               {/* Mobile User Section */}
               {isAuthenticated && user ? (
                 <Link
-                  href="/profile"
+                  href="/bookings"
                   className="text-white/90 hover:text-white transition-colors py-2 px-4 rounded-lg hover:bg-white/10"
                 >
-                  Profile
+                  My Bookings
                 </Link>
               ) : (
                 <Link href="/login">
