@@ -165,7 +165,7 @@ export function ImageUpload({
         </Alert>
       )}
 
-      {!images.length && !uploadState && (
+      {(!images || !images.length) && !uploadState && (
         <div className="space-y-4">
           <label htmlFor="image-upload" className={cn("cursor-pointer")}>
             <div className="py-6 flex items-center justify-center w-full h-32 border-1 border-dashed border-black/10 rounded-lg hover:border-purple-400 hover:bg-gray-50 transition-colors">
@@ -246,7 +246,7 @@ export function ImageUpload({
         </div>
       )}
 
-      {images.length > 0 && (
+      {images && images.length > 0 && (
         <div className="relative w-full aspect-video rounded-lg overflow-hidden">
           <Image
             src={images[0].secureUrl}

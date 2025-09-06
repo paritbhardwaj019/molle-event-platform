@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -15,28 +16,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { FormError } from "@/components/ui/form-error";
+import {
+  GoogleSignInButton,
+  CustomGoogleSignInButton,
+} from "@/components/ui/google-signin-button";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
-import { signup, googleSignIn } from "@/lib/actions/auth";
+import { signup, googleSignUp } from "@/lib/actions/auth";
+import { UserRole } from "@prisma/client";
+import { auth } from "@/lib/auth";
+
+type SignupRole = Exclude<UserRole, "ADMIN">;
 
 interface SignupFormProps {
-  role?: "USER" | "HOST" | "REFERRER";
+  role?: SignupRole;
   initialReferralCode?: string | null;
 }
 
 export default function SignupForm({
-  role = "USER",
+  role = "USER" as SignupRole,
   initialReferralCode = null,
 }: SignupFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string>();
-  const [isValidatingCode, setIsValidatingCode] = useState(false);
-  const [codeValidation, setCodeValidation] = useState<{
-    valid: boolean;
-    hostName?: string;
-    error?: string;
-  } | null>(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const {
     register,
@@ -44,78 +48,82 @@ export default function SignupForm({
     formState: { errors, isSubmitting },
     watch,
     setValue,
-    trigger,
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
       role: role,
-      agreedToTerms: false,
       referralCode: initialReferralCode || "",
+      acceptTerms: false,
     },
   });
 
-  const referralCode = watch("referralCode");
-
-  // Validate referral code when it changes
   useEffect(() => {
-    if (role === "REFERRER" && referralCode && referralCode.length >= 6) {
-      const validateCode = async () => {
-        setIsValidatingCode(true);
-        try {
-          // Import dynamically to avoid server/client issues
-          const { validateReferrerCode } = await import("@/lib/actions/auth");
-          const result = await validateReferrerCode(referralCode);
-
-          setCodeValidation(result);
-          if (!result.valid) {
-            setValue("referralCode", referralCode);
-          }
-        } catch (error) {
-          setCodeValidation({
-            valid: false,
-            error: "Failed to validate code",
-          });
-        } finally {
-          setIsValidatingCode(false);
-        }
-      };
-
-      // Debounce the validation
-      const timeoutId = setTimeout(validateCode, 500);
-      return () => clearTimeout(timeoutId);
+    if (initialReferralCode) {
+      setValue("referralCode", initialReferralCode);
     }
-  }, [referralCode, role]);
+  }, [initialReferralCode, setValue]);
+
+  const watchedRole = watch("role");
+  const watchedReferralCode = watch("referralCode");
+  const acceptTerms = watch("acceptTerms");
 
   const onSubmit = async (data: SignupFormData) => {
-    // If role is REFERRER and code is invalid, prevent submission
-    if (role === "REFERRER" && (!codeValidation || !codeValidation.valid)) {
-      setServerError("Please enter a valid referrer code");
-      return;
-    }
-
     try {
       const result = await signup(data);
       if (result.error) {
         setServerError(result.error);
       } else {
-        router.push("/dashboard");
+        // Redirect based on user role
+        if (result.user?.role === "USER") {
+          router.push("/");
+        } else {
+          router.push("/dashboard");
+        }
       }
     } catch (error) {
       setServerError("Something went wrong. Please try again.");
     }
   };
 
-  const handleGoogleSignIn = async (response: any) => {
+  const handleGoogleSignUp = async (credential: string) => {
     try {
-      const result = await googleSignIn(response.credential);
+      setIsGoogleLoading(true);
+      setServerError(undefined);
+
+      const result = await googleSignUp(
+        credential,
+        watchedRole,
+        watchedReferralCode || undefined
+      );
+
       if (result.error) {
         setServerError(result.error);
       } else {
-        router.push("/dashboard");
+        // Check if user needs to provide phone number
+        if (result.requiresPhone && result.user?.id) {
+          // For the signup form component, we'll redirect to the main signup page
+          // which will handle the phone number popup
+          router.push("/signup?googleSignup=true");
+        } else {
+          // Redirect based on user role
+          if (watchedRole === "USER") {
+            router.push("/");
+          } else {
+            router.push("/dashboard");
+          }
+        }
       }
     } catch (error) {
-      setServerError("Something went wrong with Google sign-in.");
+      setServerError("Something went wrong with Google sign-up.");
+    } finally {
+      setIsGoogleLoading(false);
     }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error("Google Sign-Up Error:", error);
+    setServerError("Failed to sign up with Google. Please try again.");
+    setIsGoogleLoading(false);
   };
 
   return (
@@ -136,6 +144,59 @@ export default function SignupForm({
           {serverError}
         </div>
       )}
+
+      {/* Google Sign-Up Section */}
+      <div className="space-y-4">
+        <div className="flex justify-center">
+          <GoogleSignInButton
+            onSuccess={handleGoogleSignUp}
+            onError={handleGoogleError}
+            text="signup_with"
+            theme="outline"
+            size="large"
+            width={350}
+            disabled={isGoogleLoading}
+          />
+        </div>
+
+        {/* Fallback Custom Button */}
+        <CustomGoogleSignInButton
+          onClick={() => {
+            if (window.google && window.google.accounts) {
+              window.google.accounts.id.prompt();
+            }
+          }}
+          disabled={isGoogleLoading}
+          className={
+            role !== "USER"
+              ? "text-white bg-white/10 border-white/20 hover:bg-white/20"
+              : ""
+          }
+        >
+          {isGoogleLoading ? "Creating account..." : "Sign up with Google"}
+        </CustomGoogleSignInButton>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div
+              className={`w-full border-t ${
+                role !== "USER" ? "border-white/20" : "border-gray-200"
+              }`}
+            />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span
+              className={`px-2 ${
+                role !== "USER"
+                  ? "bg-[#121212] text-white/70"
+                  : "bg-white text-gray-500"
+              }`}
+            >
+              Or continue with email
+            </span>
+          </div>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
@@ -177,6 +238,25 @@ export default function SignupForm({
 
         <div>
           <Label
+            htmlFor="phone"
+            className={role !== "USER" ? "text-white" : ""}
+          >
+            Mobile Number
+          </Label>
+          <Input
+            id="phone"
+            type="tel"
+            placeholder="Enter your 10-digit mobile number"
+            className={
+              role !== "USER" ? "bg-muted border-white/20 text-white" : ""
+            }
+            {...register("phone")}
+          />
+          <FormError message={errors.phone?.message} />
+        </div>
+
+        <div>
+          <Label
             htmlFor="password"
             className={role !== "USER" ? "text-white" : ""}
           >
@@ -194,146 +274,122 @@ export default function SignupForm({
           <FormError message={errors.password?.message} />
         </div>
 
-        {role === "REFERRER" && (
+        <div>
+          <Label
+            htmlFor="confirmPassword"
+            className={role !== "USER" ? "text-white" : ""}
+          >
+            Confirm Password
+          </Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            placeholder="Confirm your password"
+            className={
+              role !== "USER" ? "bg-muted border-white/20 text-white" : ""
+            }
+            {...register("confirmPassword")}
+          />
+          <FormError message={errors.confirmPassword?.message} />
+        </div>
+
+        <div>
+          <Label htmlFor="role" className={role !== "USER" ? "text-white" : ""}>
+            Account Type
+          </Label>
+          <Select
+            value={watchedRole}
+            onValueChange={(value) => setValue("role", value as SignupRole)}
+          >
+            <SelectTrigger
+              className={
+                role !== "USER" ? "bg-muted border-white/20 text-white" : ""
+              }
+            >
+              <SelectValue placeholder="Select account type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="USER">User - Attend Events</SelectItem>
+              <SelectItem value="HOST">Host - Create Events</SelectItem>
+              <SelectItem value="REFERRER">
+                Referrer - Earn Commissions
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <FormError message={errors.role?.message} />
+        </div>
+
+        {watchedRole === "REFERRER" && (
           <div>
-            <Label htmlFor="referralCode" className="text-white">
-              Referrer Code
+            <Label
+              htmlFor="referralCode"
+              className={role !== "USER" ? "text-white" : ""}
+            >
+              Referral Code (Optional)
             </Label>
             <Input
               id="referralCode"
-              placeholder="Enter your referrer code"
-              className={`bg-muted border-white/20 text-white ${
-                codeValidation?.valid
-                  ? "border-green-500"
-                  : codeValidation?.error
-                  ? "border-red-500"
-                  : ""
-              }`}
+              placeholder="Enter referral code"
+              className={
+                role !== "USER" ? "bg-muted border-white/20 text-white" : ""
+              }
               {...register("referralCode")}
             />
-            {isValidatingCode && (
-              <p className="text-xs text-blue-400 mt-1">Validating code...</p>
-            )}
-            {codeValidation?.valid && (
-              <p className="text-xs text-green-500 mt-1">
-                Valid code from host: {codeValidation.hostName}
-              </p>
-            )}
-            {!isValidatingCode && codeValidation?.error && (
-              <p className="text-xs text-red-500 mt-1">
-                {codeValidation.error}
-              </p>
-            )}
-            {!isValidatingCode && !codeValidation && referralCode && (
-              <p className="text-xs text-white/60 mt-1">
-                Enter a valid referrer code provided by a host
-              </p>
-            )}
             <FormError message={errors.referralCode?.message} />
           </div>
         )}
 
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="terms"
-              {...register("agreedToTerms")}
-              className={
-                role !== "USER"
-                  ? "border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                  : ""
-              }
-            />
-            <label
-              htmlFor="terms"
-              className={`text-sm ${
-                role !== "USER" ? "text-white" : "text-gray-600"
+        {/* Terms and Conditions Checkbox */}
+        <div className="flex items-start space-x-3">
+          <Checkbox
+            id="acceptTerms"
+            checked={acceptTerms}
+            onCheckedChange={(checked) =>
+              setValue("acceptTerms", checked === true)
+            }
+            className={
+              role !== "USER"
+                ? "border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
+                : ""
+            }
+          />
+          <div className="space-y-1 leading-none">
+            <Label
+              htmlFor="acceptTerms"
+              className={`text-sm cursor-pointer ${
+                role !== "USER" ? "text-white" : ""
               }`}
             >
               I agree to the{" "}
-              <Link
-                href="/terms"
-                className={
-                  role !== "USER"
-                    ? "text-violet-400 hover:text-violet-300"
-                    : "text-primary hover:underline"
-                }
-                target="_blank"
-              >
-                Terms of Service
+              <Link href="/terms" className="text-primary hover:underline">
+                Terms & Conditions
               </Link>{" "}
               and{" "}
-              <Link
-                href="/privacy"
-                className={
-                  role !== "USER"
-                    ? "text-violet-400 hover:text-violet-300"
-                    : "text-primary hover:underline"
-                }
-                target="_blank"
-              >
+              <Link href="/privacy" className="text-primary hover:underline">
                 Privacy Policy
               </Link>
-            </label>
+            </Label>
           </div>
-          <FormError message={errors.agreedToTerms?.message} />
         </div>
+        <FormError message={errors.acceptTerms?.message} />
 
         <Button
           type="submit"
-          className={`w-full ${
-            role !== "USER"
-              ? "bg-violet-600 text-white hover:bg-violet-700"
-              : ""
-          }`}
-          disabled={isSubmitting}
+          className="w-full"
+          disabled={isSubmitting || !acceptTerms}
         >
-          {isSubmitting ? "Creating Account..." : "Create Account"}
+          {isSubmitting ? "Creating account..." : "Create Account"}
         </Button>
       </form>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div
-            className={`w-full border-t ${
-              role !== "USER" ? "border-white/10" : "border-gray-200"
-            }`}
-          />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span
-            className={`px-2 ${
-              role !== "USER"
-                ? "bg-[#121212] text-muted-foreground"
-                : "bg-white text-gray-500"
-            }`}
-          >
-            Or continue with
-          </span>
-        </div>
-      </div>
-
-      <div
-        id="google-signin"
-        className="w-full"
-        data-callback="handleGoogleSignIn"
-      />
-
       <p
         className={`text-center text-sm ${
-          role !== "USER" ? "text-muted-foreground" : "text-gray-600"
+          role !== "USER" ? "text-white/70" : "text-gray-600"
         }`}
       >
         Already have an account?{" "}
-        <Link
-          href="/login"
-          className={
-            role !== "USER"
-              ? "text-primary hover:underline"
-              : "text-primary hover:underline"
-          }
-        >
-          Sign in
+        <Link href="/login" className="text-primary hover:underline">
+          Sign in here
         </Link>
       </p>
     </div>

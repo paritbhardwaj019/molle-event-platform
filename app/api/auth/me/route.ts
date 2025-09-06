@@ -48,6 +48,8 @@ export async function GET() {
         referralCode: true,
         referredBy: true,
         createdAt: true,
+        adminWallet: true,
+        hostFeePercentage: true,
       },
     });
 
@@ -130,6 +132,8 @@ export async function PATCH(req: Request) {
         referralCode: true,
         referredBy: true,
         createdAt: true,
+        adminWallet: true,
+        hostFeePercentage: true,
       },
     });
 

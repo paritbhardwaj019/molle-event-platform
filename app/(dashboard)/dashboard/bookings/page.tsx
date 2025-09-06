@@ -6,6 +6,8 @@ import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
 import { BookingsTable } from "@/components/bookings/bookings-table";
 import { PageHeader } from "@/components/layout/page-header";
 import { BookingStats } from "@/components/bookings/booking-stats";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPrice } from "@/lib/utils";
 
 export default function BookingsPage() {
   const router = useRouter();
@@ -31,6 +33,18 @@ export default function BookingsPage() {
         title="Bookings"
         description="View and manage all event bookings and transactions."
       />
+      {user.role === "ADMIN" && user.adminWallet !== undefined && (
+        <Card className="bg-white border border-gray-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Admin Wallet Balance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {formatPrice(user.adminWallet)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <BookingStats />
       <BookingsTable />
     </div>

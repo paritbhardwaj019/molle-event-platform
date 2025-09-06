@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormError } from "@/components/ui/form-error";
+import {
+  GoogleSignInButton,
+  CustomGoogleSignInButton,
+} from "@/components/ui/google-signin-button";
 import { loginSchema, type LoginFormData } from "@/lib/validations/auth";
 import { login, googleSignIn } from "@/lib/actions/auth";
 
@@ -17,6 +21,7 @@ export default function LoginForm() {
   const router = useRouter();
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [serverError, setServerError] = useState<string>();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const {
     register,
@@ -39,9 +44,12 @@ export default function LoginForm() {
     }
   };
 
-  const handleGoogleSignIn = async (response: any) => {
+  const handleGoogleSignIn = async (credential: string) => {
     try {
-      const result = await googleSignIn(response.credential);
+      setIsGoogleLoading(true);
+      setServerError(undefined);
+
+      const result = await googleSignIn(credential);
       if (result.error) {
         setServerError(result.error);
       } else {
@@ -49,7 +57,15 @@ export default function LoginForm() {
       }
     } catch (error) {
       setServerError("Something went wrong with Google sign-in.");
+    } finally {
+      setIsGoogleLoading(false);
     }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error("Google Sign-In Error:", error);
+    setServerError("Failed to sign in with Google. Please try again.");
+    setIsGoogleLoading(false);
   };
 
   return (
@@ -120,11 +136,31 @@ export default function LoginForm() {
         </form>
       ) : (
         <div className="space-y-4">
-          <div
-            id="google-signin"
-            className="w-full"
-            data-callback="handleGoogleSignIn"
-          />
+          {/* Google Sign-In Button */}
+          <div className="flex justify-center">
+            <GoogleSignInButton
+              onSuccess={handleGoogleSignIn}
+              onError={handleGoogleError}
+              text="signin_with"
+              theme="outline"
+              size="large"
+              width={350}
+            />
+          </div>
+
+          {/* Fallback Custom Button */}
+          <CustomGoogleSignInButton
+            onClick={() => {
+              // This will trigger the Google One Tap if the official button fails
+              if (window.google && window.google.accounts) {
+                window.google.accounts.id.prompt();
+              }
+            }}
+            disabled={isGoogleLoading}
+            className="text-sm"
+          >
+            {isGoogleLoading ? "Signing in..." : "Continue with Google"}
+          </CustomGoogleSignInButton>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

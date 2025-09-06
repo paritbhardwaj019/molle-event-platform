@@ -14,6 +14,14 @@ export const signupSchema = z
       .min(2, "Full name must be at least 2 characters")
       .max(50, "Full name must be less than 50 characters"),
     email: z.string().email("Please enter a valid email address"),
+    phone: z
+      .string()
+      .regex(
+        /^[6-9]\d{9}$/,
+        "Please enter a valid 10-digit Indian mobile number"
+      )
+      .min(10, "Phone number must be 10 digits")
+      .max(10, "Phone number must be 10 digits"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
@@ -27,14 +35,26 @@ export const signupSchema = z
     confirmPassword: z.string(),
     role: z.enum([UserRole.USER, UserRole.HOST, UserRole.REFERRER]),
     referralCode: z.string().optional(),
-    agreedToTerms: z.boolean().refine((val) => val === true, {
-      message: "You must agree to the terms and conditions",
-    }),
+    acceptTerms: z
+      .boolean()
+      .refine(
+        (val) => val === true,
+        "You must accept the Terms & Conditions and Privacy Policy"
+      ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
 
+export const phoneSchema = z.object({
+  phone: z
+    .string()
+    .regex(/^[6-9]\d{9}$/, "Please enter a valid 10-digit Indian mobile number")
+    .min(10, "Phone number must be 10 digits")
+    .max(10, "Phone number must be 10 digits"),
+});
+
 export type LoginFormData = z.infer<typeof loginSchema>;
 export type SignupFormData = z.infer<typeof signupSchema>;
+export type PhoneFormData = z.infer<typeof phoneSchema>;

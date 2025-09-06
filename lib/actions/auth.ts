@@ -2,7 +2,11 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { SignupFormData, LoginFormData } from "@/lib/validations/auth";
+import {
+  SignupFormData,
+  LoginFormData,
+  PhoneFormData,
+} from "@/lib/validations/auth";
 import { db } from "@/lib/db";
 import { hash, compare } from "bcryptjs";
 import { sign } from "jsonwebtoken";
@@ -11,6 +15,7 @@ import { UserRole } from "@prisma/client";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -26,20 +31,18 @@ async function setAuthCookie(token: string) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 }
 
 export async function signup(data: {
   fullName: string;
   email: string;
+  phone: string;
   password: string;
   role: UserRole;
-  agreedToTerms: boolean;
   referralCode?: string;
 }) {
-  console.log("signup data", data);
-
   try {
     const existingUser = await db.user.findUnique({
       where: { email: data.email },
@@ -49,47 +52,60 @@ export async function signup(data: {
       return { error: "User with this email already exists" };
     }
 
+    // Check if phone number already exists
+    const existingPhoneUser = await db.user.findUnique({
+      where: { phone: data.phone },
+    });
+
+    if (existingPhoneUser) {
+      return { error: "User with this phone number already exists" };
+    }
+
     const hashedPassword = await hash(data.password, 10);
 
-    if (data.role === UserRole.REFERRER && data.referralCode) {
-      const referrerCodeRecord = await db.hostReferrerCode.findUnique({
-        where: {
-          code: data.referralCode,
-        },
-        include: {
-          host: {
-            select: {
-              id: true,
-              name: true,
+    // Handle REFERRER role with optional referral code
+    if (data.role === UserRole.REFERRER) {
+      let userData: any = {
+        name: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        password: hashedPassword,
+        role: data.role,
+      };
+
+      // If referral code is provided, try to validate and connect it
+      if (data.referralCode) {
+        const referrerCodeRecord = await db.hostReferrerCode.findUnique({
+          where: {
+            code: data.referralCode,
+          },
+          include: {
+            host: {
+              select: {
+                id: true,
+                name: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      console.log("referrerCodeRecord", referrerCodeRecord);
-
-      if (!referrerCodeRecord) {
-        return { error: "Invalid referrer code" };
+        if (referrerCodeRecord) {
+          userData.usedReferrerCode = {
+            connect: {
+              id: referrerCodeRecord.id,
+            },
+          };
+          userData.hostReferrers = {
+            connect: {
+              id: referrerCodeRecord.host.id,
+            },
+          };
+        }
       }
 
       try {
         const user = await db.user.create({
-          data: {
-            name: data.fullName,
-            email: data.email,
-            password: hashedPassword,
-            role: data.role,
-            usedReferrerCode: {
-              connect: {
-                id: referrerCodeRecord.id,
-              },
-            },
-            hostReferrers: {
-              connect: {
-                id: referrerCodeRecord.host.id,
-              },
-            },
-          },
+          data: userData,
         });
 
         // Create token
@@ -111,6 +127,7 @@ export async function signup(data: {
       data: {
         name: data.fullName,
         email: data.email,
+        phone: data.phone,
         password: hashedPassword,
         role: data.role,
       },
@@ -122,7 +139,15 @@ export async function signup(data: {
 
     await setAuthCookie(token);
 
-    return { success: true };
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
   } catch (error) {
     console.error("Signup error:", error);
     return { error: "Something went wrong during signup" };
@@ -156,14 +181,26 @@ export async function login(data: LoginFormData) {
       return { error: "Authentication failed" };
     }
 
-    return { success: true };
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
   } catch (error) {
     console.error("Login error:", error);
     return { error: "Something went wrong" };
   }
 }
 
-export async function googleSignIn(credential: string) {
+export async function googleSignIn(
+  credential: string,
+  role?: UserRole,
+  referralCode?: string
+) {
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
@@ -180,15 +217,51 @@ export async function googleSignIn(credential: string) {
     });
 
     if (!user) {
-      user = await db.user.create({
-        data: {
-          email: payload.email,
-          name: payload.name || "Google User",
-          googleId: payload.sub,
-          role: "USER",
+      // Create new user with specified role or default to USER
+      const userRole = role || UserRole.USER;
+      let userData: any = {
+        email: payload.email,
+        name: payload.name || payload.email.split("@")[0],
+        googleId: payload.sub,
+        role: userRole,
+      };
+
+      // Handle referrer code for REFERRER role
+      if (userRole === UserRole.REFERRER && referralCode) {
+        try {
+          const referrerCodeRecord = await db.hostReferrerCode.findUnique({
+            where: { code: referralCode },
+            include: { host: { select: { id: true, name: true } } },
+          });
+
+          if (referrerCodeRecord) {
+            userData.usedReferrerCode = {
+              connect: { id: referrerCodeRecord.id },
+            };
+            userData.hostReferrers = {
+              connect: { id: referrerCodeRecord.host.id },
+            };
+          }
+        } catch (error) {
+          console.error("Error connecting referrer code:", error);
+        }
+      }
+
+      user = await db.user.create({ data: userData });
+
+      // Return user without phone number to trigger phone number collection
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
         },
-      });
+        requiresPhone: !user.phone,
+      };
     } else if (!user.googleId) {
+      // Link Google account to existing user
       user = await db.user.update({
         where: { id: user.id },
         data: { googleId: payload.sub },
@@ -198,10 +271,98 @@ export async function googleSignIn(credential: string) {
     const token = createToken(user.id);
     await setAuthCookie(token);
 
-    return { success: true };
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      requiresPhone: !user.phone,
+    };
   } catch (error) {
     console.error("Google sign-in error:", error);
-    return { error: "Something went wrong" };
+    return { error: "Something went wrong with Google sign-in" };
+  }
+}
+
+// New function specifically for Google signup with role selection
+export async function googleSignUp(
+  credential: string,
+  role: UserRole,
+  referralCode?: string
+) {
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return { error: "Invalid Google credentials" };
+    }
+
+    // Check if user already exists
+    const existingUser = await db.user.findUnique({
+      where: { email: payload.email },
+    });
+
+    if (existingUser) {
+      return {
+        error:
+          "An account with this email already exists. Please sign in instead.",
+      };
+    }
+
+    // Create new user with specified role
+    let userData: any = {
+      email: payload.email,
+      name: payload.name || payload.email.split("@")[0],
+      googleId: payload.sub,
+      role: role,
+    };
+
+    // Handle referrer code for REFERRER role
+    if (role === UserRole.REFERRER && referralCode) {
+      try {
+        const referrerCodeRecord = await db.hostReferrerCode.findUnique({
+          where: { code: referralCode },
+          include: { host: { select: { id: true, name: true } } },
+        });
+
+        if (referrerCodeRecord) {
+          userData.usedReferrerCode = {
+            connect: { id: referrerCodeRecord.id },
+          };
+          userData.hostReferrers = {
+            connect: { id: referrerCodeRecord.host.id },
+          };
+        }
+      } catch (error) {
+        console.error("Error connecting referrer code:", error);
+      }
+    }
+
+    const user = await db.user.create({ data: userData });
+
+    const token = createToken(user.id);
+    await setAuthCookie(token);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      requiresPhone: !user.phone,
+    };
+  } catch (error) {
+    console.error("Google sign-up error:", error);
+    return { error: "Something went wrong with Google sign-up" };
   }
 }
 
@@ -271,6 +432,37 @@ export async function handleReferrerSignup(
       success: false,
       error: "Failed to process referrer code",
     };
+  }
+}
+
+export async function updateUserPhone(userId: string, phone: string) {
+  try {
+    // Check if phone number already exists for another user
+    const existingPhoneUser = await db.user.findUnique({
+      where: { phone: phone },
+    });
+
+    if (existingPhoneUser && existingPhoneUser.id !== userId) {
+      return { error: "Phone number already exists" };
+    }
+
+    const user = await db.user.update({
+      where: { id: userId },
+      data: { phone: phone },
+    });
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    };
+  } catch (error) {
+    console.error("Error updating user phone:", error);
+    return { error: "Failed to update phone number" };
   }
 }
 

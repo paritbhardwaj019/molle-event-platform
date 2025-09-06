@@ -141,10 +141,15 @@ export async function getFeaturedEvents() {
     const featuredEvents = await db.event.findMany({
       where: {
         status: "PUBLISHED",
+        isFeatured: true,
+        endDate: {
+          gt: new Date(), // Only show events that haven't ended
+        },
       },
       select: {
         id: true,
         title: true,
+        slug: true,
         description: true,
         coverImage: true,
         startDate: true,
@@ -152,7 +157,7 @@ export async function getFeaturedEvents() {
         organizerName: true,
         maxTickets: true,
         soldTickets: true,
-
+        location: true,
         packages: {
           orderBy: {
             price: "asc",
@@ -174,11 +179,15 @@ export async function getFeaturedEvents() {
       data: featuredEvents.map((event) => ({
         id: event.id,
         title: event.title,
+        slug: event.slug,
         subtitle: event.description,
         coverImage: event.coverImage,
         date: format(event.startDate, "dd/MM/yyyy"),
         time: format(event.startDate, "h:mm a"),
-        location: "TBA",
+        location: event.location,
+        organizerName: event.organizerName,
+        maxTickets: event.maxTickets,
+        soldTickets: event.soldTickets,
         price: Number(event.packages[0]?.price || 0),
         tags: ["FEATURED"],
       })),
@@ -215,6 +224,15 @@ export async function getHostBookings() {
       };
     }
 
+    // Get platform fee percentage
+    const platformSettingResult = await db.platformSetting.findUnique({
+      where: { key: "platform_fee_percentage" },
+    });
+
+    const platformFeePercentage = platformSettingResult
+      ? Number(platformSettingResult.value)
+      : 10; // Default 10% if not set
+
     const bookings = await db.booking.findMany({
       where: {
         event: {
@@ -238,11 +256,12 @@ export async function getHostBookings() {
           select: {
             title: true,
             slug: true,
+            enableReferrers: true,
           },
         },
         payment: {
           select: {
-            razorpayPaymentId: true,
+            cashfreePaymentId: true,
             amount: true,
             createdAt: true,
           },
@@ -251,6 +270,7 @@ export async function getHostBookings() {
           select: {
             referrer: {
               select: {
+                id: true,
                 name: true,
               },
             },
@@ -263,29 +283,37 @@ export async function getHostBookings() {
       },
     });
 
-    const formattedBookings = bookings.map((booking) => ({
-      id: booking.id,
-      transactionId: booking.payment?.razorpayPaymentId || "",
-      amount: Number(booking.payment?.amount || 0),
-      paidAt: booking.payment?.createdAt || booking.bookedAt,
-      customer: {
-        id: booking.user.id,
-        name: booking.user.name,
-        email: booking.user.email,
-        avatar: booking.user.avatar,
-      },
-      event: {
-        id: booking.eventId,
-        title: booking.event.title,
-        slug: booking.event.slug,
-      },
-      referredBy: booking.referralLink
-        ? {
-            name: booking.referralLink.referrer.name,
-            code: booking.referralLink.referralCode,
-          }
-        : null,
-    }));
+    const formattedBookings = bookings.map((booking) => {
+      const amount = Number(booking.payment?.amount || 0);
+      const adminCut = (amount * platformFeePercentage) / 100;
+
+      return {
+        id: booking.id,
+        transactionId: booking.payment?.cashfreePaymentId || "",
+        amount,
+        adminCut,
+        paidAt: booking.payment?.createdAt || booking.bookedAt,
+        customer: {
+          id: booking.user.id,
+          name: booking.user.name,
+          email: booking.user.email,
+          avatar: booking.user.avatar,
+        },
+        event: {
+          id: booking.eventId,
+          title: booking.event.title,
+          slug: booking.event.slug,
+          enableReferrers: booking.event.enableReferrers,
+        },
+        referredBy: booking.referralLink
+          ? {
+              id: booking.referralLink.referrer.id,
+              name: booking.referralLink.referrer.name,
+              code: booking.referralLink.referralCode,
+            }
+          : null,
+      };
+    });
 
     return {
       success: true,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ type FeaturedEvent = {
   location: string;
   price: number;
   tags: string[];
+  slug: string;
 };
 
 export function HeroCarousel() {
@@ -32,6 +34,8 @@ export function HeroCarousel() {
   useEffect(() => {
     const fetchEvents = async () => {
       const result = await getFeaturedEvents();
+      console.log(result);
+
       if (result.success && result.data) {
         setEvents(result.data);
       }
@@ -68,8 +72,8 @@ export function HeroCarousel() {
             index === currentSlide
               ? "translate-x-0"
               : index < currentSlide
-              ? "-translate-x-full"
-              : "translate-x-full"
+                ? "-translate-x-full"
+                : "translate-x-full"
           }`}
         >
           <div className="relative h-full">
@@ -122,9 +126,11 @@ export function HeroCarousel() {
                     <span className="text-2xl font-bold text-accent-gold font-spaceGrotesk">
                       ₹{event.price}
                     </span>
-                    <Button className="btn-primary font-spaceGrotesk">
-                      View Details
-                    </Button>
+                    <Link href={`/events/${event.slug}`}>
+                      <Button className="btn-primary font-spaceGrotesk">
+                        View Event
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </div>

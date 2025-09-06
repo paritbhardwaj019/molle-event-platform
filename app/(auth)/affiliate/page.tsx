@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import { FormError } from "@/components/ui/form-error";
 import { PasswordStrength } from "@/components/ui/password-strength";
+import { GoogleSignInButton } from "@/components/ui/google-signin-button";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
-import { signup, googleSignIn } from "@/lib/actions/auth";
+import { signup, googleSignUp } from "@/lib/actions/auth";
 import { UserRole } from "@prisma/client";
 
 function AffiliateContent() {
@@ -26,6 +28,7 @@ function AffiliateContent() {
     hostName?: string;
     error?: string;
   } | null>(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const {
     register,
@@ -38,8 +41,8 @@ function AffiliateContent() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       role: "REFERRER",
-      agreedToTerms: true,
       referralCode: "",
+      acceptTerms: false,
     },
   });
 
@@ -54,6 +57,7 @@ function AffiliateContent() {
 
   const password = watch("password");
   const currentReferralCode = watch("referralCode");
+  const acceptTerms = watch("acceptTerms");
 
   // Validate referral code when it changes
   useEffect(() => {
@@ -82,16 +86,13 @@ function AffiliateContent() {
       // Debounce the validation
       const timeoutId = setTimeout(validateCode, 500);
       return () => clearTimeout(timeoutId);
+    } else if (!currentReferralCode) {
+      // Clear validation when code is empty
+      setCodeValidation(null);
     }
   }, [currentReferralCode, setValue]);
 
   const onSubmit = async (data: SignupFormData) => {
-    // If code is invalid, prevent submission
-    if (!codeValidation || !codeValidation.valid) {
-      setServerError("Please enter a valid referrer code");
-      return;
-    }
-
     try {
       const result = await signup(data);
       if (result.error) {
@@ -104,17 +105,33 @@ function AffiliateContent() {
     }
   };
 
-  const handleGoogleSignIn = async (response: any) => {
+  const handleGoogleSignUp = async (credential: string) => {
     try {
-      const result = await googleSignIn(response.credential);
+      setIsGoogleLoading(true);
+      setServerError(undefined);
+
+      const result = await googleSignUp(
+        credential,
+        "REFERRER" as UserRole,
+        currentReferralCode || undefined
+      );
+
       if (result.error) {
         setServerError(result.error);
       } else {
         router.push("/dashboard");
       }
     } catch (error) {
-      setServerError("Something went wrong with Google sign-in.");
+      setServerError("Something went wrong with Google sign-up.");
+    } finally {
+      setIsGoogleLoading(false);
     }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error("Google Sign-Up Error:", error);
+    setServerError("Failed to sign up with Google. Please try again.");
+    setIsGoogleLoading(false);
   };
 
   return (
@@ -146,13 +163,10 @@ function AffiliateContent() {
 
           <div className="space-y-6">
             <h1 className="text-5xl font-bold leading-tight">
-              Become an Affiliate and Earn with Every Referral!
-            </h1>
-            <p className="text-xl text-white/80">
               Join our affiliate program and start earning commissions by
-              promoting amazing events. Share your unique referral code and get
-              rewarded for every successful signup and ticket sale.
-            </p>
+              promoting amazing events. Share your unique referral code or link
+              and get rewarded for every successful ticket sale.
+            </h1>
 
             <div className="mt-8 space-y-4">
               <div className="flex items-center space-x-4">
@@ -161,7 +175,7 @@ function AffiliateContent() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold">
-                    Earn Up to 15% Commission
+                    Earn awesome commissions
                   </h3>
                   <p className="text-sm text-white/80">
                     Get competitive commissions on every successful referral and
@@ -199,12 +213,11 @@ function AffiliateContent() {
 
             <div className="mt-8 p-4 bg-white/5 rounded-lg border border-white/10">
               <p className="text-sm text-white/80">
-                "I've been an affiliate for 6 months and have already earned
-                over $2,000 in commissions. The platform makes it so easy to
-                track everything!"
+                "I have been an affiliate since 2 months and have earned over 1
+                lakh in commissions. Molle makes it so easy to sell tickets!"
               </p>
               <p className="text-sm font-medium mt-2">
-                Alex Chen • Top Affiliate Partner
+                Milan sharma • Top affiliate partneer
               </p>
             </div>
           </div>
@@ -284,6 +297,20 @@ function AffiliateContent() {
               </div>
 
               <div>
+                <Label htmlFor="phone" className="text-white">
+                  Phone Number
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your 10-digit phone number"
+                  className="bg-muted border-white/20 text-white"
+                  {...register("phone")}
+                />
+                <FormError message={errors.phone?.message} />
+              </div>
+
+              <div>
                 <Label htmlFor="password" className="text-white">
                   Create Password
                 </Label>
@@ -318,17 +345,17 @@ function AffiliateContent() {
 
               <div>
                 <Label htmlFor="referralCode" className="text-white">
-                  Referrer Code
+                  Referrer Code (Optional)
                 </Label>
                 <Input
                   id="referralCode"
-                  placeholder="Enter your referrer code"
+                  placeholder="Enter your referrer code (optional)"
                   className={`bg-muted border-white/20 text-white ${
                     codeValidation?.valid
                       ? "border-green-500"
                       : codeValidation?.error
-                      ? "border-red-500"
-                      : ""
+                        ? "border-red-500"
+                        : ""
                   }`}
                   {...register("referralCode")}
                 />
@@ -365,55 +392,54 @@ function AffiliateContent() {
                   !codeValidation &&
                   currentReferralCode && (
                     <p className="text-xs text-white/60 mt-1">
-                      Enter a valid referrer code provided by a host
+                      Enter a valid referrer code provided by a host (optional)
                     </p>
                   )}
                 <FormError message={errors.referralCode?.message} />
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="terms"
-                    {...register("agreedToTerms")}
-                    className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                    aria-invalid={errors.agreedToTerms ? "true" : "false"}
-                  />
-                  <label
-                    htmlFor="terms"
-                    className={`text-sm font-medium leading-none ${
-                      errors.agreedToTerms ? "text-red-500" : "text-white"
-                    }`}
+              {/* Terms and Conditions Checkbox */}
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="acceptTerms"
+                  checked={acceptTerms}
+                  onCheckedChange={(checked) =>
+                    setValue("acceptTerms", checked === true)
+                  }
+                  className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
+                />
+                <div className="space-y-1 leading-none">
+                  <Label
+                    htmlFor="acceptTerms"
+                    className="text-sm cursor-pointer text-white"
                   >
-                    By signing up, you agree to our{" "}
+                    I agree to the{" "}
                     <Link
                       href="/terms"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
+                      className="text-primary hover:underline"
                       target="_blank"
+                      rel="noopener noreferrer"
                     >
-                      Terms of Service
+                      Terms & Conditions
                     </Link>{" "}
                     and{" "}
                     <Link
                       href="/privacy"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
+                      className="text-primary hover:underline"
                       target="_blank"
+                      rel="noopener noreferrer"
                     >
                       Privacy Policy
                     </Link>
-                  </label>
+                  </Label>
                 </div>
-                {errors.agreedToTerms && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors.agreedToTerms.message}
-                  </p>
-                )}
               </div>
+              <FormError message={errors.acceptTerms?.message} />
 
               <Button
                 type="submit"
                 className="w-full bg-violet-600 text-white hover:bg-violet-700 transition-colors"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !acceptTerms}
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center">
@@ -446,22 +472,28 @@ function AffiliateContent() {
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
+                  <div className="w-full border-t border-white/20" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#121212] px-2 text-muted-foreground">
+                  <span className="bg-[#121212] px-2 text-white/70">
                     Or continue with
                   </span>
                 </div>
               </div>
 
-              <div
-                id="google-signin"
-                className="w-full"
-                data-callback="handleGoogleSignIn"
-              />
+              {/* Google Sign-Up Section */}
+              <div className="flex justify-center">
+                <GoogleSignInButton
+                  onSuccess={handleGoogleSignUp}
+                  onError={handleGoogleError}
+                  text="signup_with"
+                  theme="outline"
+                  size="large"
+                  width={350}
+                />
+              </div>
 
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-center text-sm text-white/70">
                 Already have an account?{" "}
                 <Link href="/login" className="text-primary hover:underline">
                   Log in here

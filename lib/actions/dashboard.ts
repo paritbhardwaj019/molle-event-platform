@@ -27,12 +27,16 @@ export async function getHostMetrics() {
   ] = await Promise.all([
     db.event.count({
       where: {
+        hostId: session.user.id,
         status: { not: "CANCELLED" },
       },
     }),
     db.booking.count({
       where: {
-        status: { not: "CANCELLED" },
+        event: {
+          hostId: session.user.id,
+        },
+        status: { in: ["COMPLETED"] },
       },
     }),
     db.user.count({
@@ -41,6 +45,9 @@ export async function getHostMetrics() {
         status: "ACTIVE",
         bookings: {
           some: {
+            event: {
+              hostId: session.user.id,
+            },
             status: { not: "CANCELLED" },
           },
         },
@@ -50,18 +57,23 @@ export async function getHostMetrics() {
       where: {
         role: "REFERRER",
         status: "ACTIVE",
+        referredByHostId: session.user.id,
       },
     }),
     db.inviteRequest.count({
       where: {
         status: "PENDING",
         event: {
+          hostId: session.user.id,
           status: { not: "CANCELLED" },
         },
       },
     }),
     db.booking.aggregate({
       where: {
+        event: {
+          hostId: session.user.id,
+        },
         status: "COMPLETED",
         updatedAt: {
           gte: startOfCurrentMonth,
@@ -73,6 +85,9 @@ export async function getHostMetrics() {
     }),
     db.booking.aggregate({
       where: {
+        event: {
+          hostId: session.user.id,
+        },
         status: "COMPLETED",
         updatedAt: {
           gte: startOfLastMonth,
@@ -89,6 +104,9 @@ export async function getHostMetrics() {
         status: "ACTIVE",
         bookings: {
           some: {
+            event: {
+              hostId: session.user.id,
+            },
             status: { not: "CANCELLED" },
             updatedAt: {
               gte: startOfLastMonth,

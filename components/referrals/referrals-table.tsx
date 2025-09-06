@@ -13,7 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { getUserReferrals } from "@/lib/actions/referral";
+import { getUserReferralsForDashboard } from "@/lib/actions/referral";
 import { Badge } from "@/components/ui/badge";
 
 interface Referral {
@@ -38,7 +38,7 @@ export function ReferralsTable() {
   useEffect(() => {
     const fetchReferrals = async () => {
       try {
-        const result = await getUserReferrals();
+        const result = await getUserReferralsForDashboard();
         if (result.success && result.data) {
           setReferrals(result.data);
         } else {

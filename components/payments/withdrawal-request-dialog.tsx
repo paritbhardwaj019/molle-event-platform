@@ -21,19 +21,29 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import {
-  requestWithdrawal,
-  getUserBankDetails,
-  type BankDetails,
-} from "@/lib/actions/payout";
-import { CreditCard, Phone, User, Building, AlertCircle } from "lucide-react";
+import { requestWithdrawal } from "@/lib/actions/payout";
+import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  getUserBankAccounts,
+  type BankAccount,
+} from "@/lib/actions/bank-account";
+import { getHostKycRequest, type KycRequest } from "@/lib/actions/kyc";
+import { UserRole } from "@prisma/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface WithdrawalRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   maxAmount: number;
+  userRole: UserRole;
 }
 
 export function WithdrawalRequestDialog({
@@ -41,34 +51,60 @@ export function WithdrawalRequestDialog({
   onOpenChange,
   onSuccess,
   maxAmount,
+  userRole,
 }: WithdrawalRequestDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingBankDetails, setIsLoadingBankDetails] = useState(false);
   const [amount, setAmount] = useState("");
-  const [bankDetails, setBankDetails] = useState<BankDetails>({
-    accountNumber: "",
-    ifscCode: "",
-    accountName: "",
-    phone: "",
-  });
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [selectedBankAccountId, setSelectedBankAccountId] =
+    useState<string>("");
+  const [isLoadingBankAccounts, setIsLoadingBankAccounts] = useState(false);
+  const [hostKyc, setHostKyc] = useState<KycRequest | null>(null);
+  const [isLoadingKyc, setIsLoadingKyc] = useState(false);
 
   useEffect(() => {
     if (open) {
-      fetchBankDetails();
+      if (userRole === "REFERRER") {
+        fetchBankAccounts();
+      } else if (userRole === "HOST") {
+        fetchHostKyc();
+      }
     }
-  }, [open]);
+  }, [open, userRole]);
 
-  const fetchBankDetails = async () => {
+  const fetchBankAccounts = async () => {
     try {
-      setIsLoadingBankDetails(true);
-      const result = await getUserBankDetails();
+      setIsLoadingBankAccounts(true);
+      const result = await getUserBankAccounts();
       if (result.success && result.data) {
-        setBankDetails(result.data);
+        setBankAccounts(result.data);
+
+        // Set default bank account if available
+        const defaultAccount = result.data.find((account) => account.isDefault);
+        if (defaultAccount) {
+          setSelectedBankAccountId(defaultAccount.id);
+        } else if (result.data.length > 0) {
+          setSelectedBankAccountId(result.data[0].id);
+        }
       }
     } catch (error) {
-      console.error("Failed to fetch bank details:", error);
+      console.error("Error fetching bank accounts:", error);
     } finally {
-      setIsLoadingBankDetails(false);
+      setIsLoadingBankAccounts(false);
+    }
+  };
+
+  const fetchHostKyc = async () => {
+    try {
+      setIsLoadingKyc(true);
+      const result = await getHostKycRequest();
+      if (result.success && result.data) {
+        setHostKyc(result.data);
+      }
+    } catch (error) {
+      console.error("Error fetching KYC details:", error);
+    } finally {
+      setIsLoadingKyc(false);
     }
   };
 
@@ -93,36 +129,18 @@ export function WithdrawalRequestDialog({
       return;
     }
 
-    if (
-      !bankDetails.accountNumber ||
-      !bankDetails.ifscCode ||
-      !bankDetails.accountName ||
-      !bankDetails.phone
-    ) {
-      toast.error("Please fill in all bank details");
-      return;
-    }
-
-    // Validate IFSC code format (basic validation)
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-    if (!ifscRegex.test(bankDetails.ifscCode.toUpperCase())) {
-      toast.error("Please enter a valid IFSC code");
-      return;
-    }
-
-    // Validate phone number (basic validation for Indian numbers)
-    const phoneRegex = /^[6-9]\d{9}$/;
-    if (!phoneRegex.test(bankDetails.phone)) {
-      toast.error("Please enter a valid 10-digit mobile number");
+    // For referrers, validate bank account selection
+    if (userRole === "REFERRER" && !selectedBankAccountId) {
+      toast.error("Please select a bank account");
       return;
     }
 
     try {
       setIsLoading(true);
-      const result = await requestWithdrawal(withdrawalAmount, {
-        ...bankDetails,
-        ifscCode: bankDetails.ifscCode.toUpperCase(),
-      });
+      const result = await requestWithdrawal(
+        withdrawalAmount,
+        selectedBankAccountId
+      );
 
       if (result.success) {
         toast.success("Withdrawal request submitted successfully", {
@@ -165,21 +183,28 @@ export function WithdrawalRequestDialog({
     }
   };
 
-  const handleBankDetailsChange = (field: keyof BankDetails, value: string) => {
-    setBankDetails((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  // Helper function to mask account number
+  const maskAccountNumber = (accountNumber: string): string => {
+    if (accountNumber.length <= 4) return accountNumber;
+    const lastFour = accountNumber.slice(-4);
+    const masked = "X".repeat(accountNumber.length - 4);
+    return masked + lastFour;
+  };
+
+  const getSelectedBankAccount = () => {
+    return bankAccounts.find((account) => account.id === selectedBankAccountId);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Request Withdrawal</DialogTitle>
           <DialogDescription>
             Submit a withdrawal request from your wallet balance. All requests
-            require admin approval.
+            require admin approval and will be processed using your{" "}
+            {userRole === "HOST" ? "KYC bank details" : "selected bank account"}
+            .
           </DialogDescription>
         </DialogHeader>
 
@@ -225,114 +250,120 @@ export function WithdrawalRequestDialog({
             )}
           </div>
 
-          <Separator />
-
-          {/* Bank Details */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Building className="h-5 w-5 text-gray-500" />
-              <h3 className="text-lg font-semibold">Bank Details</h3>
+          {/* Bank Account Selection for Referrers */}
+          {userRole === "REFERRER" && (
+            <div className="space-y-2">
+              <Label htmlFor="bankAccount">Select Bank Account</Label>
+              {isLoadingBankAccounts ? (
+                <div className="h-10 bg-gray-100 animate-pulse rounded-md"></div>
+              ) : bankAccounts.length === 0 ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You need to add a bank account before requesting a
+                    withdrawal.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Select
+                  value={selectedBankAccountId}
+                  onValueChange={setSelectedBankAccountId}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select bank account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bankAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.bankName} -{" "}
+                        {maskAccountNumber(account.accountNumber)}
+                        {account.isDefault ? " (Default)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+          )}
 
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Please ensure your bank details are correct. Incorrect details
-                may cause delays in processing your withdrawal.
-              </AlertDescription>
-            </Alert>
+          {/* Selected Bank Account Details for Referrers */}
+          {userRole === "REFERRER" && selectedBankAccountId && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  Selected Bank Account
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const account = getSelectedBankAccount();
+                  if (!account) return null;
 
-            {isLoadingBankDetails ? (
-              <div className="space-y-4">
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                  <div className="h-10 bg-gray-200 rounded"></div>
-                </div>
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                  <div className="h-10 bg-gray-200 rounded"></div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="accountName">Account Holder Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="accountName"
-                      type="text"
-                      value={bankDetails.accountName}
-                      onChange={(e) =>
-                        handleBankDetailsChange("accountName", e.target.value)
-                      }
-                      placeholder="Full name as per bank account"
-                      className="pl-10"
-                      disabled={isLoading}
-                    />
+                  return (
+                    <div className="space-y-1 text-sm">
+                      <div>
+                        <span className="font-medium">Bank:</span>{" "}
+                        {account.bankName}
+                      </div>
+                      <div>
+                        <span className="font-medium">Account Number:</span>{" "}
+                        {maskAccountNumber(account.accountNumber)}
+                      </div>
+                      <div>
+                        <span className="font-medium">IFSC:</span>{" "}
+                        {account.ifscCode}
+                      </div>
+                      <div>
+                        <span className="font-medium">Account Holder:</span>{" "}
+                        {account.accountName}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bank Details for Hosts */}
+          {userRole === "HOST" && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">
+                  KYC Bank Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingKyc ? (
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-100 animate-pulse rounded-md w-3/4"></div>
+                    <div className="h-4 bg-gray-100 animate-pulse rounded-md w-1/2"></div>
+                    <div className="h-4 bg-gray-100 animate-pulse rounded-md w-2/3"></div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Mobile Number</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={bankDetails.phone}
-                      onChange={(e) =>
-                        handleBankDetailsChange("phone", e.target.value)
-                      }
-                      placeholder="10-digit mobile number"
-                      className="pl-10"
-                      maxLength={10}
-                      disabled={isLoading}
-                    />
+                ) : hostKyc ? (
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="font-medium">Bank:</span>{" "}
+                      {hostKyc.bankName}
+                    </div>
+                    <div>
+                      <span className="font-medium">IFSC Code:</span>{" "}
+                      {hostKyc.bankBranch}
+                    </div>
+                    <div>
+                      <span className="font-medium">Account Number:</span>{" "}
+                      {maskAccountNumber(hostKyc.accountNumber)}
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="accountNumber">Account Number</Label>
-                  <div className="relative">
-                    <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="accountNumber"
-                      type="text"
-                      value={bankDetails.accountNumber}
-                      onChange={(e) =>
-                        handleBankDetailsChange("accountNumber", e.target.value)
-                      }
-                      placeholder="Bank account number"
-                      className="pl-10"
-                      disabled={isLoading}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ifscCode">IFSC Code</Label>
-                  <Input
-                    id="ifscCode"
-                    type="text"
-                    value={bankDetails.ifscCode}
-                    onChange={(e) =>
-                      handleBankDetailsChange(
-                        "ifscCode",
-                        e.target.value.toUpperCase()
-                      )
-                    }
-                    placeholder="ABCD0123456"
-                    maxLength={11}
-                    disabled={isLoading}
-                  />
-                  <p className="text-xs text-gray-500">
-                    11-character IFSC code of your bank branch
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    KYC details not found. Please complete your KYC
+                    verification.
                   </p>
-                </div>
-              </div>
-            )}
-          </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Alert>
             <AlertCircle className="h-4 w-4" />
@@ -357,7 +388,9 @@ export function WithdrawalRequestDialog({
                 isLoading ||
                 !amount ||
                 parseFloat(amount) < 100 ||
-                parseFloat(amount) > maxAmount
+                parseFloat(amount) > maxAmount ||
+                (userRole === "REFERRER" &&
+                  (!selectedBankAccountId || bankAccounts.length === 0))
               }
             >
               {isLoading ? "Submitting..." : "Submit Request"}

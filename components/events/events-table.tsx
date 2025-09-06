@@ -17,12 +17,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Copy, Trash2, Eye, Star } from "lucide-react";
+import { Copy, Trash2, Eye, Star, Edit } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   getAllEvents,
   deleteEvent,
   updateEventFeaturedStatus,
+  getEventById,
 } from "@/lib/actions/event";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -38,6 +39,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
+import { type EventFormData } from "@/lib/validations/event";
 
 interface Event {
   id: string;
@@ -61,12 +64,18 @@ const truncateText = (text: string, maxLength: number) => {
   return text.slice(0, maxLength) + "...";
 };
 
-export function EventsTable() {
+interface EventsTableProps {
+  onEditEvent?: (event: EventFormData & { id: string }) => void;
+}
+
+export function EventsTable({ onEditEvent }: EventsTableProps) {
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isLoadingEvent, setIsLoadingEvent] = useState(false);
+  const { user } = useLoggedInUser();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -109,6 +118,26 @@ export function EventsTable() {
     toast.success("Event URL copied to clipboard", {
       description: "You can now share this link with others",
     });
+  };
+
+  const handleEditEvent = async (eventId: string) => {
+    try {
+      setIsLoadingEvent(true);
+      const result = await getEventById(eventId);
+
+      if (result.success && result.data) {
+        const eventData = { ...result.data, id: eventId };
+        if (onEditEvent) {
+          onEditEvent(eventData);
+        }
+      } else {
+        toast.error(result.error || "Failed to load event details");
+      }
+    } catch (error) {
+      toast.error("An error occurred while loading event details");
+    } finally {
+      setIsLoadingEvent(false);
+    }
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -176,7 +205,7 @@ export function EventsTable() {
               <TableHead>Status</TableHead>
               <TableHead>Start Date</TableHead>
               <TableHead>End Date</TableHead>
-              <TableHead>Capacity</TableHead>
+              <TableHead>Crowd Size</TableHead>
               <TableHead>Bookings</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
@@ -221,6 +250,7 @@ export function EventsTable() {
                     <Skeleton className="h-8 w-8" />
                     <Skeleton className="h-8 w-8" />
                     <Skeleton className="h-8 w-8" />
+                    <Skeleton className="h-8 w-8" />
                   </div>
                 </TableCell>
               </TableRow>
@@ -232,179 +262,210 @@ export function EventsTable() {
   }
 
   return (
-    <div className="rounded-lg border border-gray-100 bg-white">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-gray-50">
-            <TableHead className="w-[30px]">
-              <Checkbox
-                checked={
-                  selectedEvents.length === events.length && events.length > 0
-                }
-                onCheckedChange={(checked) => toggleAll(checked as boolean)}
-              />
-            </TableHead>
-            <TableHead>Event Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Start Date</TableHead>
-            <TableHead>End Date</TableHead>
-            <TableHead>Capacity</TableHead>
-            <TableHead>Bookings</TableHead>
-            <TableHead className="text-center">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {events.map((event) => (
-            <TableRow key={event.id}>
-              <TableCell>
+    <>
+      <div className="rounded-lg border border-gray-100 bg-white">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-gray-50">
+              <TableHead className="w-[30px]">
                 <Checkbox
-                  checked={selectedEvents.includes(event.id)}
-                  onCheckedChange={() => toggleEvent(event.id)}
+                  checked={
+                    selectedEvents.length === events.length && events.length > 0
+                  }
+                  onCheckedChange={(checked) => toggleAll(checked as boolean)}
                 />
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-md">
-                    <Image
-                      src={event.coverImage}
-                      alt={event.title}
-                      fill
-                      className="object-cover"
-                    />
+              </TableHead>
+              <TableHead>Event Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Start Date</TableHead>
+              <TableHead>End Date</TableHead>
+              <TableHead>Crowd Size</TableHead>
+              <TableHead>Bookings</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {events.map((event) => (
+              <TableRow key={event.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedEvents.includes(event.id)}
+                    onCheckedChange={() => toggleEvent(event.id)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-10 w-10 overflow-hidden rounded-md">
+                      <Image
+                        src={event.coverImage}
+                        alt={event.title}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="font-medium">{event.title}</span>
+                      <p className="text-sm text-gray-500 line-clamp-1">
+                        {truncateText(event.description, 60)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <span className="font-medium">{event.title}</span>
-                    <p className="text-sm text-gray-500 line-clamp-1">
-                      {truncateText(event.description, 60)}
-                    </p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    event.eventType === "NORMAL"
-                      ? "bg-blue-50 text-blue-700"
-                      : "bg-purple-50 text-purple-700"
-                  }`}
-                >
-                  {event.eventType === "NORMAL" ? "Public" : "Invite Only"}
-                </span>
-              </TableCell>
-              <TableCell>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    event.status === "PUBLISHED"
-                      ? "bg-green-50 text-green-700"
-                      : event.status === "DRAFT"
-                      ? "bg-gray-50 text-gray-700"
-                      : event.status === "CANCELLED"
-                      ? "bg-red-50 text-red-700"
-                      : "bg-blue-50 text-blue-700"
-                  }`}
-                >
-                  {event.status}
-                </span>
-              </TableCell>
-              <TableCell>
-                {format(new Date(event.startDate), "MMM d, yyyy")}
-              </TableCell>
-              <TableCell>
-                {format(new Date(event.endDate), "MMM d, yyyy")}
-              </TableCell>
-              <TableCell>{event.maxTickets}</TableCell>
-              <TableCell>{event.bookings.length}</TableCell>
-              <TableCell>
-                <div className="flex justify-center gap-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-8 w-8 ${
-                            event.isFeatured
-                              ? "text-yellow-500 hover:text-yellow-600"
-                              : "text-gray-400 hover:text-gray-600"
-                          } hover:bg-gray-50`}
-                          onClick={() =>
-                            handleToggleFeatured(event.id, event.isFeatured)
-                          }
-                          disabled={isUpdating}
-                        >
-                          <Star className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>
-                          {event.isFeatured
-                            ? "Unfeature event"
-                            : "Feature event"}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      event.eventType === "NORMAL"
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-purple-50 text-purple-700"
+                    }`}
+                  >
+                    {event.eventType === "NORMAL" ? "Public" : "Invite Only"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      event.status === "PUBLISHED"
+                        ? "bg-green-50 text-green-700"
+                        : event.status === "DRAFT"
+                          ? "bg-gray-50 text-gray-700"
+                          : event.status === "CANCELLED"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    {event.status}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {format(new Date(event.startDate), "MMM d, yyyy")}
+                </TableCell>
+                <TableCell>
+                  {format(new Date(event.endDate), "MMM d, yyyy")}
+                </TableCell>
+                <TableCell>{event.maxTickets}</TableCell>
+                <TableCell>{event.bookings.length}</TableCell>
+                <TableCell>
+                  <div className="flex justify-center gap-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-gray-50"
+                            onClick={() => handleEditEvent(event.id)}
+                            disabled={isLoadingEvent}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Edit event</p>
+                        </TooltipContent>
+                      </Tooltip>
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                          onClick={() => handleCopyEventUrl(event.slug)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Copy event URL</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+                      {user?.role !== "HOST" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-gray-50"
-                              disabled={isDeleting}
+                              className={`h-8 w-8 ${
+                                event.isFeatured
+                                  ? "text-yellow-500 hover:text-yellow-600"
+                                  : "text-gray-400 hover:text-gray-600"
+                              } hover:bg-gray-50`}
+                              onClick={() =>
+                                handleToggleFeatured(event.id, event.isFeatured)
+                              }
+                              disabled={isUpdating}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Star className="h-4 w-4" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Event</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete this event? This
-                                action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteEvent(event.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Delete event</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              {event.isFeatured
+                                ? "Unfeature event"
+                                : "Feature event"}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                            onClick={() => handleCopyEventUrl(event.slug)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Copy event URL</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        {(user?.role === "ADMIN" || user?.role === "HOST") && (
+                          <>
+                            <TooltipTrigger asChild>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-gray-50"
+                                    disabled={isDeleting}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete Event
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this
+                                      event? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        handleDeleteEvent(event.id)
+                                      }
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete event</p>
+                            </TooltipContent>
+                          </>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }

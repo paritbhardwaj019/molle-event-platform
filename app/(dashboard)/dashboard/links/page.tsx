@@ -19,15 +19,15 @@ export default function LinksPage() {
   return (
     <div className="flex flex-col gap-8 p-8">
       <PageHeader
-        title="Referral Links"
-        subtitle="Generate and manage your referral links"
+        title="Event Referral Links"
+        subtitle="Generate and manage your event referral links"
         action={
           <Button
             onClick={() => setIsCreateDialogOpen(true)}
             className="flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
-            Create Link
+            Create Event Link
           </Button>
         }
       />

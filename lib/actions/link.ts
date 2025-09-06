@@ -27,8 +27,7 @@ export type ReferralLink = {
 };
 
 export type CreateLinkInput = {
-  type: ReferralLinkType;
-  eventId?: string;
+  eventId: string;
 };
 
 export async function createReferralLink(input: CreateLinkInput) {
@@ -53,14 +52,26 @@ export async function createReferralLink(input: CreateLinkInput) {
       };
     }
 
-    if (input.type === ReferralLinkType.EVENT && input.eventId) {
-      const event = await db.event.findUnique({
-        where: { id: input.eventId },
-        select: {
-          id: true,
-          slug: true,
-        },
-      });
+    if (!input.eventId) {
+      return {
+        success: false,
+        error: "Event ID is required for creating referral links",
+      };
+    }
+
+    const event = await db.event.findUnique({
+      where: { id: input.eventId },
+      select: {
+        id: true,
+        slug: true,
+      },
+    });
+
+    if (!event) {
+      return {
+        success: false,
+        error: "Event not found",
+      };
     }
 
     const referralCode = nanoid(8);
@@ -68,7 +79,7 @@ export async function createReferralLink(input: CreateLinkInput) {
     const referralLink = await db.referralLink.create({
       data: {
         referralCode,
-        type: input.type,
+        type: ReferralLinkType.EVENT,
         eventId: input.eventId,
         referrerId: session.user.id,
       },
@@ -180,10 +191,7 @@ export async function getAllReferralLinks() {
       email: link.referrer.email,
       referralCode: link.referralCode,
       type: link.type,
-      signupCount:
-        link.type === ReferralLinkType.SIGNUP
-          ? link.signups.length
-          : link.bookings.length,
+      signupCount: link.bookings.length,
       walletBalance: Number(link.referrer.walletBalance),
       createdAt: link.createdAt,
       updatedAt: link.updatedAt,

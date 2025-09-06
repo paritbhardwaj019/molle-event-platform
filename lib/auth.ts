@@ -42,6 +42,7 @@ export async function auth() {
         referredBy: true,
         referredByHostId: true,
         createdAt: true,
+        hostFeePercentage: true,
       },
     });
 

@@ -34,25 +34,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface LinksTableProps {
   key?: string;
   onLinkCreated?: () => void;
 }
 
-type FilterType = "all" | ReferralLinkType;
-
 export function LinksTable({ onLinkCreated }: LinksTableProps) {
   const [links, setLinks] = useState<ReferralLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterType, setFilterType] = useState<FilterType>("all");
+
   const [linkToDelete, setLinkToDelete] = useState<ReferralLink | null>(null);
 
   const fetchLinks = async () => {
@@ -78,22 +69,15 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
 
   const handleCopyLink = (
     referralCode: string,
-    type: ReferralLinkType,
     eventTitle?: string,
     eventSlug?: string
   ) => {
-    const link =
-      type === ReferralLinkType.SIGNUP
-        ? `${process.env.NEXT_PUBLIC_URL}/signup?ref=${referralCode}`
-        : `${process.env.NEXT_PUBLIC_URL}/events/${eventSlug}?ref=${referralCode}`;
+    const link = `${process.env.NEXT_PUBLIC_URL}/events/${eventSlug}?ref=${referralCode}`;
     navigator.clipboard.writeText(link);
     toast.success("Referral link copied", {
-      description:
-        type === ReferralLinkType.SIGNUP
-          ? "Share this link to earn rewards when users sign up through it"
-          : `Share this link to earn rewards when users book tickets for ${
-              eventTitle || "this event"
-            }`,
+      description: `Share this link to earn rewards when users book tickets for ${
+        eventTitle || "this event"
+      }`,
     });
   };
 
@@ -116,9 +100,7 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
       if (result.success) {
         toast.success("Link deleted successfully", {
           description: `The referral link for ${
-            linkToDelete.type === ReferralLinkType.SIGNUP
-              ? "signups"
-              : linkToDelete.event?.title || "the event"
+            linkToDelete.event?.title || "the event"
           } has been permanently deleted.`,
         });
         fetchLinks();
@@ -137,10 +119,7 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
     }
   };
 
-  const filteredLinks = links.filter((link) => {
-    if (filterType === "all") return true;
-    return link.type === filterType;
-  });
+  const filteredLinks = links;
 
   if (isLoading) {
     return (
@@ -148,19 +127,17 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-gray-50">
-              <TableHead>Type</TableHead>
               <TableHead>Event</TableHead>
               <TableHead>Generated At</TableHead>
               <TableHead>
-                Action Count
+                Bookings
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info className="ml-1 h-4 w-4 inline-block text-gray-400" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>For signup links: total signups via this link</p>
-                      <p>For event links: total bookings via this link</p>
+                      <p>Total bookings made via this referral link</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -171,9 +148,6 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
           <TableBody>
             {[...Array(3)].map((_, index) => (
               <TableRow key={index}>
-                <TableCell>
-                  <Skeleton className="h-6 w-20" />
-                </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-[200px]" />
                 </TableCell>
@@ -198,41 +172,21 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Select
-          value={filterType}
-          onValueChange={(value: FilterType) => setFilterType(value)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Links</SelectItem>
-            <SelectItem value={ReferralLinkType.SIGNUP}>
-              Signup Links
-            </SelectItem>
-            <SelectItem value={ReferralLinkType.EVENT}>Event Links</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="rounded-lg border border-gray-100 bg-white">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-gray-50">
-              <TableHead>Type</TableHead>
               <TableHead>Event</TableHead>
               <TableHead>Generated At</TableHead>
               <TableHead>
-                Action Count
+                Bookings
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Info className="ml-1 h-4 w-4 inline-block text-gray-400" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>For signup links: total signups via this link</p>
-                      <p>For event links: total bookings via this link</p>
+                      <p>Total bookings made via this referral link</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -244,18 +198,7 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
             {filteredLinks.map((link) => (
               <TableRow key={link.id}>
                 <TableCell>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      link.type === ReferralLinkType.SIGNUP
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-purple-50 text-purple-700"
-                    }`}
-                  >
-                    {link.type === ReferralLinkType.SIGNUP ? "Signup" : "Event"}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {link.type === ReferralLinkType.EVENT && link.event ? (
+                  {link.event ? (
                     <Link
                       href={`/events/${link.event.slug}`}
                       className="text-blue-600 hover:underline"
@@ -271,10 +214,7 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
                 </TableCell>
                 <TableCell>
                   <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700">
-                    {link.signupCount}{" "}
-                    {link.type === ReferralLinkType.SIGNUP
-                      ? "signups"
-                      : "bookings"}
+                    {link.signupCount} bookings
                   </span>
                 </TableCell>
                 <TableCell>
@@ -289,7 +229,6 @@ export function LinksTable({ onLinkCreated }: LinksTableProps) {
                             onClick={() =>
                               handleCopyLink(
                                 link.referralCode,
-                                link.type,
                                 link.event?.title,
                                 link.event?.slug
                               )

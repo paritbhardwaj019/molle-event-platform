@@ -158,7 +158,7 @@ export async function createHostReferralCode() {
     const referralLink = await db.referralLink.create({
       data: {
         referralCode,
-        type: ReferralLinkType.SIGNUP,
+        type: ReferralLinkType.EVENT,
         referrerId: session.user.id,
         hostId: session.user.id,
       },
@@ -266,7 +266,7 @@ export async function signupAsReferrer(hostReferralCode: string) {
     const referralLink = await db.referralLink.findUnique({
       where: {
         referralCode: hostReferralCode,
-        type: ReferralLinkType.SIGNUP,
+        type: ReferralLinkType.EVENT,
       },
       include: {
         referrer: true,
@@ -301,6 +301,186 @@ export async function signupAsReferrer(hostReferralCode: string) {
     return {
       success: false,
       error: "Failed to sign up as referrer",
+    };
+  }
+}
+
+export async function getUserReferralsForDashboard() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to view referrals",
+      };
+    }
+
+    // For REFERRER role - get their own referrals
+    if (session.user.role === "REFERRER") {
+      const referrals = await db.referral.findMany({
+        where: {
+          referrerId: session.user.id,
+        },
+        include: {
+          referredUser: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          referralLink: {
+            include: {
+              event: {
+                select: {
+                  title: true,
+                  slug: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      const formattedReferrals = referrals.map((referral) => ({
+        id: referral.id,
+        commission: Number(referral.commission),
+        isPaid: referral.isCommissionPaid,
+        createdAt: referral.createdAt,
+        customer: {
+          name: referral.referredUser.name,
+          email: referral.referredUser.email,
+        },
+        event: referral.referralLink?.event
+          ? {
+              title: referral.referralLink.event.title,
+              slug: referral.referralLink.event.slug,
+            }
+          : null,
+      }));
+
+      return {
+        success: true,
+        data: formattedReferrals,
+      };
+    }
+
+    // For HOST role - get referrals made through their events
+    if (session.user.role === "HOST") {
+      const referrals = await db.referral.findMany({
+        where: {
+          referralLink: {
+            event: {
+              hostId: session.user.id,
+            },
+          },
+        },
+        include: {
+          referredUser: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          referralLink: {
+            include: {
+              event: {
+                select: {
+                  title: true,
+                  slug: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      const formattedReferrals = referrals.map((referral) => ({
+        id: referral.id,
+        commission: Number(referral.commission),
+        isPaid: referral.isCommissionPaid,
+        createdAt: referral.createdAt,
+        customer: {
+          name: referral.referredUser.name,
+          email: referral.referredUser.email,
+        },
+        event: referral.referralLink?.event
+          ? {
+              title: referral.referralLink.event.title,
+              slug: referral.referralLink.event.slug,
+            }
+          : null,
+      }));
+
+      return {
+        success: true,
+        data: formattedReferrals,
+      };
+    }
+
+    // For ADMIN role - get all referrals
+    if (session.user.role === "ADMIN") {
+      const referrals = await db.referral.findMany({
+        include: {
+          referredUser: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          referralLink: {
+            include: {
+              event: {
+                select: {
+                  title: true,
+                  slug: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      const formattedReferrals = referrals.map((referral) => ({
+        id: referral.id,
+        commission: Number(referral.commission),
+        isPaid: referral.isCommissionPaid,
+        createdAt: referral.createdAt,
+        customer: {
+          name: referral.referredUser.name,
+          email: referral.referredUser.email,
+        },
+        event: referral.referralLink?.event
+          ? {
+              title: referral.referralLink.event.title,
+              slug: referral.referralLink.event.slug,
+            }
+          : null,
+      }));
+
+      return {
+        success: true,
+        data: formattedReferrals,
+      };
+    }
+
+    return {
+      success: false,
+      error: "Unauthorized to view referrals",
+    };
+  } catch (error) {
+    console.error("Error fetching user referrals for dashboard:", error);
+    return {
+      success: false,
+      error: "Failed to fetch referrals",
     };
   }
 }

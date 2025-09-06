@@ -20,8 +20,13 @@ export function SidebarWrapper({ children }: SidebarWrapperProps) {
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-gradient-to-r from-white to-gray-50/50 px-4">
-          <SidebarTrigger className="text-gray-600 hover:text-violet-600 hover:bg-violet-50 transition-colors" />
-          <Separator orientation="vertical" className="mr-2 h-4 bg-gray-200" />
+          <div className="hidden lg:flex">
+            <SidebarTrigger className="text-gray-600 hover:text-violet-600 hover:bg-violet-50 transition-colors" />
+            <Separator
+              orientation="vertical"
+              className="mr-2 h-4 bg-gray-200"
+            />
+          </div>
         </header>
         <main className="flex-1 overflow-auto bg-gray-50/30">{children}</main>
       </SidebarInset>

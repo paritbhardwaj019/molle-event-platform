@@ -9,15 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import { FormError } from "@/components/ui/form-error";
 import { PasswordStrength } from "@/components/ui/password-strength";
+import { GoogleSignInButton } from "@/components/ui/google-signin-button";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
-import { signup, googleSignIn } from "@/lib/actions/auth";
+import { signup, googleSignUp } from "@/lib/actions/auth";
 import { UserRole } from "@prisma/client";
 
 export default function ListShowPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string>();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const {
     register,
@@ -29,11 +32,12 @@ export default function ListShowPage() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       role: "HOST",
-      agreedToTerms: true,
+      acceptTerms: false,
     },
   });
 
   const password = watch("password");
+  const acceptTerms = watch("acceptTerms");
 
   const onSubmit = async (data: SignupFormData) => {
     try {
@@ -48,17 +52,29 @@ export default function ListShowPage() {
     }
   };
 
-  const handleGoogleSignIn = async (response: any) => {
+  const handleGoogleSignUp = async (credential: string) => {
     try {
-      const result = await googleSignIn(response.credential);
+      setIsGoogleLoading(true);
+      setServerError(undefined);
+
+      const result = await googleSignUp(credential, "HOST" as UserRole);
+
       if (result.error) {
         setServerError(result.error);
       } else {
         router.push("/dashboard");
       }
     } catch (error) {
-      setServerError("Something went wrong with Google sign-in.");
+      setServerError("Something went wrong with Google sign-up.");
+    } finally {
+      setIsGoogleLoading(false);
     }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error("Google Sign-Up Error:", error);
+    setServerError("Failed to sign up with Google. Please try again.");
+    setIsGoogleLoading(false);
   };
 
   return (
@@ -90,12 +106,12 @@ export default function ListShowPage() {
 
           <div className="space-y-6">
             <h1 className="text-5xl font-bold leading-tight">
-              List Your Show and Reach Thousands of Fans!
+              List your event with molle and reach thousands of attendees
+              organically
             </h1>
             <p className="text-xl text-white/80">
-              Transform your passion into profit. Create unforgettable
-              experiences, connect with your audience, and grow your event
-              hosting business with our powerful platform.
+              Create unforgettable experiences, connect with your audience, and
+              grow your event hosting business with our powerful platform
             </p>
 
             <div className="mt-8 space-y-4">
@@ -161,7 +177,7 @@ export default function ListShowPage() {
                 amazing!"
               </p>
               <p className="text-sm font-medium mt-2">
-                Maria Rodriguez • Event Producer, ShowTime Events
+                Priya Sharma • Event Producer, ShowTime Events
               </p>
             </div>
           </div>
@@ -238,6 +254,20 @@ export default function ListShowPage() {
               </div>
 
               <div>
+                <Label htmlFor="phone" className="text-white">
+                  Phone Number
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your 10-digit phone number"
+                  className="bg-muted border-white/20 text-white"
+                  {...register("phone")}
+                />
+                <FormError message={errors.phone?.message} />
+              </div>
+
+              <div>
                 <Label htmlFor="password" className="text-white">
                   Create Password
                 </Label>
@@ -270,49 +300,48 @@ export default function ListShowPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="terms"
-                    {...register("agreedToTerms")}
-                    className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                    aria-invalid={errors.agreedToTerms ? "true" : "false"}
-                  />
-                  <label
-                    htmlFor="terms"
-                    className={`text-sm font-medium leading-none ${
-                      errors.agreedToTerms ? "text-red-500" : "text-white"
-                    }`}
+              {/* Terms and Conditions Checkbox */}
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="acceptTerms"
+                  checked={acceptTerms}
+                  onCheckedChange={(checked) =>
+                    setValue("acceptTerms", checked === true)
+                  }
+                  className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
+                />
+                <div className="space-y-1 leading-none">
+                  <Label
+                    htmlFor="acceptTerms"
+                    className="text-sm cursor-pointer text-white"
                   >
-                    By signing up, you agree to our{" "}
+                    I agree to the{" "}
                     <Link
                       href="/terms"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
-                      target="_blank"
+                      className="text-primary hover:underline"
                     >
-                      Terms of Service
+                      Terms & Conditions
                     </Link>{" "}
                     and{" "}
                     <Link
                       href="/privacy"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
-                      target="_blank"
+                      className="text-primary hover:underline"
                     >
                       Privacy Policy
                     </Link>
-                  </label>
+                  </Label>
                 </div>
-                {errors.agreedToTerms && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors.agreedToTerms.message}
-                  </p>
-                )}
               </div>
+              <FormError message={errors.acceptTerms?.message} />
 
               <Button
                 type="submit"
-                className="w-full bg-violet-600 text-white hover:bg-violet-700 transition-colors"
-                disabled={isSubmitting}
+                className={`w-full transition-colors ${
+                  !acceptTerms
+                    ? "bg-violet-600/50 text-white/70 cursor-not-allowed"
+                    : "bg-violet-600 text-white hover:bg-violet-700"
+                }`}
+                disabled={isSubmitting || !acceptTerms}
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center">
@@ -345,22 +374,28 @@ export default function ListShowPage() {
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
+                  <div className="w-full border-t border-white/20" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#121212] px-2 text-muted-foreground">
+                  <span className="bg-[#121212] px-2 text-white/70">
                     Or continue with
                   </span>
                 </div>
               </div>
 
-              <div
-                id="google-signin"
-                className="w-full"
-                data-callback="handleGoogleSignIn"
-              />
+              {/* Google Sign-Up Section */}
+              <div className="flex justify-center">
+                <GoogleSignInButton
+                  onSuccess={handleGoogleSignUp}
+                  onError={handleGoogleError}
+                  text="signup_with"
+                  theme="outline"
+                  size="large"
+                  width={350}
+                />
+              </div>
 
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-center text-sm text-white/70">
                 Already have an account?{" "}
                 <Link href="/login" className="text-primary hover:underline">
                   Log in here

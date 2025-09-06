@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       });
     } else if (userRole === "HOST") {
       // Count unread messages from admin
-      unreadCount = await db.message.count({
+      const adminUnreadCount = await db.message.count({
         where: {
           isRead: false,
           senderId: {
@@ -38,6 +38,34 @@ export async function GET(request: NextRequest) {
           },
           conversation: {
             hostId: userId,
+          },
+        },
+      });
+
+      // Count unread messages from users
+      const userUnreadCount = await db.userHostMessage.count({
+        where: {
+          isRead: false,
+          senderId: {
+            not: userId,
+          },
+          conversation: {
+            hostId: userId,
+          },
+        },
+      });
+
+      unreadCount = adminUnreadCount + userUnreadCount;
+    } else if (userRole === "USER") {
+      // Count unread messages from hosts
+      unreadCount = await db.userHostMessage.count({
+        where: {
+          isRead: false,
+          senderId: {
+            not: userId,
+          },
+          conversation: {
+            userId: userId,
           },
         },
       });

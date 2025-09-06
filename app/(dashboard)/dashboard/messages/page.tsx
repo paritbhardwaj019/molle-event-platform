@@ -7,39 +7,66 @@ import {
   type Conversation,
   type Message,
 } from "@/lib/hooks/use-messaging";
+import { useUserHostMessaging } from "@/lib/hooks/use-user-host-messaging";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StartConversation } from "@/components/messaging/start-conversation";
-import { Send, MessageCircle } from "lucide-react";
+import { Send, MessageCircle, Users, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function MessagesPage() {
   const { user } = useLoggedInUser();
-  const {
-    conversations,
-    messages,
-    loading,
-    error,
-    fetchConversations,
-    fetchMessages,
-    sendMessage,
-  } = useMessaging();
 
-  const [selectedConversation, setSelectedConversation] =
+  // Admin messages hook
+  const {
+    conversations: adminConversations,
+    messages: adminMessages,
+    loading: adminLoading,
+    error: adminError,
+    isConnected: adminConnected,
+    fetchConversations: fetchAdminConversations,
+    fetchMessages: fetchAdminMessages,
+    sendMessage: sendAdminMessage,
+  } = useMessaging(user?.id);
+
+  // User-host messages hook
+  const {
+    conversations: userHostConversations,
+    messages: userHostMessages,
+    loading: userHostLoading,
+    error: userHostError,
+    isConnected: userHostConnected,
+    fetchConversations: fetchUserHostConversations,
+    fetchMessages: fetchUserHostMessages,
+    sendMessage: sendUserHostMessage,
+  } = useUserHostMessaging(user?.id);
+
+  const [adminSelectedConversation, setAdminSelectedConversation] =
     useState<Conversation | null>(null);
-  const [newMessage, setNewMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  const [userHostSelectedConversation, setUserHostSelectedConversation] =
+    useState<any>(null);
+  const [newAdminMessage, setNewAdminMessage] = useState("");
+  const [newUserHostMessage, setNewUserHostMessage] = useState("");
+  const [sendingAdmin, setSendingAdmin] = useState(false);
+  const [sendingUserHost, setSendingUserHost] = useState(false);
   const [adminId, setAdminId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState("users");
+  const adminMessagesEndRef = useRef<HTMLDivElement>(null);
+  const userHostMessagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
-      fetchConversations();
+      if (user.role === "HOST" || user.role === "ADMIN") {
+        fetchAdminConversations();
+      }
+      if (user.role === "HOST") {
+        fetchUserHostConversations();
+      }
 
-      // Fetch admin ID for hosts
       if (user.role === "HOST") {
         fetch("/api/admin/info")
           .then((res) => res.json())
@@ -51,41 +78,68 @@ export default function MessagesPage() {
           .catch(console.error);
       }
     }
-  }, [user, fetchConversations]);
+  }, [user, fetchAdminConversations, fetchUserHostConversations]);
 
   useEffect(() => {
-    if (selectedConversation) {
-      fetchMessages(selectedConversation.id);
+    if (adminSelectedConversation) {
+      fetchAdminMessages(adminSelectedConversation.id);
     }
-  }, [selectedConversation, fetchMessages]);
+  }, [adminSelectedConversation, fetchAdminMessages]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (userHostSelectedConversation) {
+      fetchUserHostMessages(userHostSelectedConversation.id);
+    }
+  }, [userHostSelectedConversation, fetchUserHostMessages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  useEffect(() => {
+    adminMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [adminMessages]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  useEffect(() => {
+    userHostMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [userHostMessages]);
+
+  const handleSendAdminMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if (!newAdminMessage.trim() || !adminSelectedConversation || sendingAdmin)
+      return;
 
     const recipientId =
       user?.role === "HOST"
-        ? selectedConversation.adminId
-        : selectedConversation.hostId;
+        ? adminSelectedConversation.adminId
+        : adminSelectedConversation.hostId;
 
     try {
-      setSending(true);
-      await sendMessage(newMessage.trim(), recipientId);
-      setNewMessage("");
-      // Refresh messages after sending
-      fetchMessages(selectedConversation.id);
+      setSendingAdmin(true);
+      await sendAdminMessage(newAdminMessage.trim(), recipientId);
+      setNewAdminMessage("");
     } catch (error) {
-      console.error("Failed to send message:", error);
+      console.error("Failed to send admin message:", error);
     } finally {
-      setSending(false);
+      setSendingAdmin(false);
+    }
+  };
+
+  const handleSendUserHostMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !newUserHostMessage.trim() ||
+      !userHostSelectedConversation ||
+      sendingUserHost
+    )
+      return;
+
+    const recipientId = userHostSelectedConversation.userId;
+
+    try {
+      setSendingUserHost(true);
+      await sendUserHostMessage(newUserHostMessage.trim(), recipientId);
+      setNewUserHostMessage("");
+    } catch (error) {
+      console.error("Failed to send user-host message:", error);
+    } finally {
+      setSendingUserHost(false);
     }
   };
 
@@ -105,8 +159,16 @@ export default function MessagesPage() {
     }
   };
 
-  const getLastMessage = (conversation: Conversation) => {
-    return conversation.messages[0];
+  const getUserHostConversationTitle = (conversation: any) => {
+    return conversation.user?.name || "User";
+  };
+
+  const getUserHostConversationAvatar = (conversation: any) => {
+    return conversation.user?.avatar;
+  };
+
+  const getLastMessage = (conversation: any) => {
+    return conversation.messages?.[0];
   };
 
   const getInitials = (name: string) => {
@@ -132,265 +194,526 @@ export default function MessagesPage() {
     </div>
   );
 
-  const MessagesSkeleton = () => (
-    <div className="p-4 space-y-4">
-      {[...Array(5)].map((_, i) => (
-        <div
-          key={i}
-          className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}
-        >
-          <Skeleton
-            className={`h-16 ${i % 2 === 0 ? "w-48" : "w-32"} rounded-lg`}
-          />
-        </div>
-      ))}
-    </div>
-  );
-
   if (!user) {
-    return <div>Please log in to access messages.</div>;
-  }
-
-  if (user.role !== "HOST" && user.role !== "ADMIN") {
-    return <div>Access denied. Only hosts and admins can access messages.</div>;
+    return <div>Loading...</div>;
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] bg-gray-50">
-      {/* Conversations List */}
-      <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <MessageCircle className="mr-2 h-5 w-5" />
-            Messages
-          </h2>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {loading && conversations.length === 0 ? (
-            <ConversationSkeleton />
-          ) : conversations.length === 0 ? (
-            <div className="p-4">
-              {user.role === "HOST" && adminId ? (
-                <StartConversation
-                  adminId={adminId}
-                  onMessageSent={() => {
-                    fetchConversations();
-                  }}
-                />
-              ) : (
-                <div className="text-center text-gray-500 py-8">
-                  <MessageCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm">
-                    {user.role === "HOST"
-                      ? "Loading..."
-                      : "No conversations yet. Hosts will appear here when they message you."}
-                  </p>
-                </div>
-              )}
+    <div className="w-full">
+      <div className="bg-white rounded-lg shadow h-[calc(100vh-120px)]">
+        <div className="flex h-full">
+          {/* Sidebar */}
+          <div className="w-80 border-r bg-gray-50 flex flex-col">
+            <div className="p-4 border-b">
+              <h1 className="text-xl font-semibold text-gray-900 flex items-center">
+                <MessageCircle className="h-5 w-5 mr-2" />
+                Messages
+                {(adminConnected || userHostConnected) && (
+                  <div className="ml-2 flex items-center">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                    <span className="text-xs text-green-600">Live</span>
+                  </div>
+                )}
+              </h1>
             </div>
-          ) : (
-            <div className="space-y-1 p-2">
-              {conversations.map((conversation) => {
-                const lastMessage = getLastMessage(conversation);
-                const unreadCount = conversation._count.messages;
 
-                return (
-                  <div
-                    key={conversation.id}
-                    onClick={() => setSelectedConversation(conversation)}
-                    className={`p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-                      selectedConversation?.id === conversation.id
-                        ? "bg-purple-50 border border-purple-200 shadow-sm"
-                        : "hover:bg-gray-50 hover:shadow-sm"
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage
-                          src={getConversationAvatar(conversation)}
-                          alt={getConversationTitle(conversation)}
-                        />
-                        <AvatarFallback className="bg-purple-100 text-purple-600 font-medium">
-                          {getInitials(getConversationTitle(conversation))}
-                        </AvatarFallback>
-                      </Avatar>
+            {user.role === "HOST" ? (
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="flex-1 flex flex-col"
+              >
+                <div className="px-4 pt-4">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="users" className="flex items-center">
+                      <Users className="w-4 h-4 mr-1" />
+                      Customers
+                    </TabsTrigger>
+                    <TabsTrigger value="admin" className="flex items-center">
+                      <Shield className="w-4 h-4 mr-1" />
+                      Admin
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {getConversationTitle(conversation)}
+                <TabsContent value="users" className="flex-1 mt-0 p-0">
+                  <div className="flex-1 overflow-y-auto">
+                    {userHostLoading && userHostConversations.length === 0 ? (
+                      <ConversationSkeleton />
+                    ) : userHostConversations.length === 0 ? (
+                      <div className="p-4">
+                        <div className="text-center text-gray-500 py-8">
+                          <Users className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <p className="text-sm">
+                            No conversations with customers yet.
                           </p>
-                          {unreadCount > 0 && (
-                            <Badge variant="destructive" className="ml-2">
-                              {unreadCount}
-                            </Badge>
-                          )}
                         </div>
+                      </div>
+                    ) : (
+                      <div className="p-2">
+                        {userHostConversations.map((conversation) => {
+                          const lastMessage = getLastMessage(conversation);
+                          const title =
+                            getUserHostConversationTitle(conversation);
+                          const avatar =
+                            getUserHostConversationAvatar(conversation);
+                          const isSelected =
+                            userHostSelectedConversation?.id ===
+                            conversation.id;
 
-                        {lastMessage && (
-                          <div className="flex items-center justify-between mt-1">
-                            <p className="text-xs text-gray-500 truncate">
-                              {lastMessage.content}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {formatDistanceToNow(
-                                new Date(lastMessage.createdAt),
-                                { addSuffix: true }
-                              )}
+                          return (
+                            <div
+                              key={conversation.id}
+                              className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? "bg-blue-50 border border-blue-200"
+                                  : "hover:bg-gray-100"
+                              }`}
+                              onClick={() =>
+                                setUserHostSelectedConversation(conversation)
+                              }
+                            >
+                              <div className="flex items-center space-x-3">
+                                <Avatar>
+                                  <AvatarImage src={avatar || undefined} />
+                                  <AvatarFallback>
+                                    {getInitials(title)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-medium text-gray-900 truncate">
+                                      {title}
+                                    </p>
+                                    {lastMessage && (
+                                      <span className="text-xs text-gray-500">
+                                        {formatDistanceToNow(
+                                          new Date(lastMessage.createdAt),
+                                          {
+                                            addSuffix: true,
+                                          }
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {lastMessage && (
+                                    <p className="text-sm text-gray-500 truncate">
+                                      {lastMessage.senderId === user?.id
+                                        ? "You: "
+                                        : ""}
+                                      {lastMessage.content}
+                                    </p>
+                                  )}
+                                  {conversation._count?.messages > 0 && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="mt-1 text-xs"
+                                    >
+                                      {conversation._count.messages}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="admin" className="flex-1 mt-0 p-0">
+                  <div className="flex-1 overflow-y-auto">
+                    {adminLoading && adminConversations.length === 0 ? (
+                      <ConversationSkeleton />
+                    ) : adminConversations.length === 0 ? (
+                      <div className="p-4">
+                        {adminId ? (
+                          <StartConversation
+                            adminId={adminId}
+                            onMessageSent={() => {
+                              fetchAdminConversations();
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center text-gray-500 py-8">
+                            <Shield className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                            <p className="text-sm">
+                              Loading admin information...
                             </p>
                           </div>
                         )}
                       </div>
+                    ) : (
+                      <div className="p-2">
+                        {adminConversations.map((conversation) => {
+                          const lastMessage = getLastMessage(conversation);
+                          const title = getConversationTitle(conversation);
+                          const avatar = getConversationAvatar(conversation);
+                          const isSelected =
+                            adminSelectedConversation?.id === conversation.id;
+
+                          return (
+                            <div
+                              key={conversation.id}
+                              className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? "bg-blue-50 border border-blue-200"
+                                  : "hover:bg-gray-100"
+                              }`}
+                              onClick={() =>
+                                setAdminSelectedConversation(conversation)
+                              }
+                            >
+                              <div className="flex items-center space-x-3">
+                                <Avatar>
+                                  <AvatarImage src={avatar || undefined} />
+                                  <AvatarFallback>
+                                    {getInitials(title)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-medium text-gray-900 truncate">
+                                      {title}
+                                    </p>
+                                    {lastMessage && (
+                                      <span className="text-xs text-gray-500">
+                                        {formatDistanceToNow(
+                                          new Date(lastMessage.createdAt),
+                                          {
+                                            addSuffix: true,
+                                          }
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {lastMessage && (
+                                    <p className="text-sm text-gray-500 truncate">
+                                      {lastMessage.senderId === user?.id
+                                        ? "You: "
+                                        : ""}
+                                      {lastMessage.content}
+                                    </p>
+                                  )}
+                                  {conversation._count?.messages > 0 && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="mt-1 text-xs"
+                                    >
+                                      {conversation._count.messages}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              // Admin view - only admin conversations
+              <div className="flex-1 overflow-y-auto">
+                {adminLoading && adminConversations.length === 0 ? (
+                  <ConversationSkeleton />
+                ) : adminConversations.length === 0 ? (
+                  <div className="p-4">
+                    <div className="text-center text-gray-500 py-8">
+                      <Shield className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm">
+                        No conversations with hosts yet.
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+                ) : (
+                  <div className="p-2">
+                    {adminConversations.map((conversation) => {
+                      const lastMessage = getLastMessage(conversation);
+                      const title = getConversationTitle(conversation);
+                      const avatar = getConversationAvatar(conversation);
+                      const isSelected =
+                        adminSelectedConversation?.id === conversation.id;
 
-      {/* Messages Area */}
-      <div className="flex-1 flex flex-col">
-        {selectedConversation ? (
-          <>
-            {/* Chat Header */}
-            <div className="p-4 bg-white border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage
-                    src={getConversationAvatar(selectedConversation)}
-                    alt={getConversationTitle(selectedConversation)}
+                      return (
+                        <div
+                          key={conversation.id}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-blue-50 border border-blue-200"
+                              : "hover:bg-gray-100"
+                          }`}
+                          onClick={() =>
+                            setAdminSelectedConversation(conversation)
+                          }
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Avatar>
+                              <AvatarImage src={avatar || undefined} />
+                              <AvatarFallback>
+                                {getInitials(title)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {title}
+                                </p>
+                                {lastMessage && (
+                                  <span className="text-xs text-gray-500">
+                                    {formatDistanceToNow(
+                                      new Date(lastMessage.createdAt),
+                                      {
+                                        addSuffix: true,
+                                      }
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                              {lastMessage && (
+                                <p className="text-sm text-gray-500 truncate">
+                                  {lastMessage.senderId === user?.id
+                                    ? "You: "
+                                    : ""}
+                                  {lastMessage.content}
+                                </p>
+                              )}
+                              {conversation._count?.messages > 0 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="mt-1 text-xs"
+                                >
+                                  {conversation._count.messages}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col">
+            {(activeTab === "users" && userHostSelectedConversation) ||
+            (activeTab === "admin" && adminSelectedConversation) ||
+            (user.role === "ADMIN" && adminSelectedConversation) ? (
+              <>
+                {/* Chat Header */}
+                <div className="p-4 border-b bg-white">
+                  <div className="flex items-center space-x-3">
+                    <Avatar>
+                      <AvatarImage
+                        src={
+                          activeTab === "users" && userHostSelectedConversation
+                            ? getUserHostConversationAvatar(
+                                userHostSelectedConversation
+                              )
+                            : adminSelectedConversation
+                            ? getConversationAvatar(adminSelectedConversation)
+                            : undefined
+                        }
+                      />
+                      <AvatarFallback>
+                        {activeTab === "users" && userHostSelectedConversation
+                          ? getInitials(
+                              getUserHostConversationTitle(
+                                userHostSelectedConversation
+                              )
+                            )
+                          : adminSelectedConversation
+                          ? getInitials(
+                              getConversationTitle(adminSelectedConversation)
+                            )
+                          : "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        {activeTab === "users" && userHostSelectedConversation
+                          ? getUserHostConversationTitle(
+                              userHostSelectedConversation
+                            )
+                          : adminSelectedConversation
+                          ? getConversationTitle(adminSelectedConversation)
+                          : "Unknown"}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {activeTab === "users"
+                          ? "Customer"
+                          : user?.role === "HOST"
+                          ? "Admin"
+                          : "Host"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {((activeTab === "users" && userHostLoading) ||
+                    (activeTab === "admin" && adminLoading)) &&
+                  ((activeTab === "users" && userHostMessages.length === 0) ||
+                    (activeTab === "admin" && adminMessages.length === 0)) ? (
+                    <div className="space-y-4">
+                      {[...Array(3)].map((_, i) => (
+                        <div
+                          key={i}
+                          className={`flex ${
+                            i % 2 === 0 ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <Skeleton className="h-12 w-64 rounded-lg" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (activeTab === "users" &&
+                      userHostMessages.length === 0) ||
+                    (activeTab === "admin" && adminMessages.length === 0) ? (
+                    <div className="text-center text-gray-500 py-8">
+                      <MessageCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm">
+                        No messages yet. Start the conversation!
+                      </p>
+                    </div>
+                  ) : (
+                    (activeTab === "users"
+                      ? userHostMessages
+                      : adminMessages
+                    ).map((message) => {
+                      const isOwn = message.senderId === user?.id;
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            isOwn ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div className="flex items-start space-x-2 max-w-xs lg:max-w-md">
+                            {!isOwn && (
+                              <Avatar className="w-6 h-6">
+                                <AvatarImage
+                                  src={message.sender?.avatar || undefined}
+                                />
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(message.sender?.name || "U")}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div
+                              className={`px-4 py-2 rounded-lg ${
+                                isOwn
+                                  ? "bg-blue-500 text-white"
+                                  : "bg-gray-100 text-gray-900"
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <span className="text-xs opacity-70">
+                                {new Date(message.createdAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            </div>
+                            {isOwn && (
+                              <Avatar className="w-6 h-6">
+                                <AvatarImage src={user?.avatar || undefined} />
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(user?.name || "U")}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div
+                    ref={
+                      activeTab === "users"
+                        ? userHostMessagesEndRef
+                        : adminMessagesEndRef
+                    }
                   />
-                  <AvatarFallback className="bg-purple-100 text-purple-600 font-medium text-xs">
-                    {getInitials(getConversationTitle(selectedConversation))}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">
-                    {getConversationTitle(selectedConversation)}
+                </div>
+
+                {/* Message Input */}
+                <div className="p-4 border-t bg-white">
+                  <form
+                    onSubmit={
+                      activeTab === "users"
+                        ? handleSendUserHostMessage
+                        : handleSendAdminMessage
+                    }
+                    className="flex space-x-2"
+                  >
+                    <Input
+                      value={
+                        activeTab === "users"
+                          ? newUserHostMessage
+                          : newAdminMessage
+                      }
+                      onChange={(e) =>
+                        activeTab === "users"
+                          ? setNewUserHostMessage(e.target.value)
+                          : setNewAdminMessage(e.target.value)
+                      }
+                      placeholder="Type your message..."
+                      disabled={
+                        activeTab === "users" ? sendingUserHost : sendingAdmin
+                      }
+                      className="flex-1"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={
+                        activeTab === "users"
+                          ? !newUserHostMessage.trim() || sendingUserHost
+                          : !newAdminMessage.trim() || sendingAdmin
+                      }
+                    >
+                      {(
+                        activeTab === "users" ? sendingUserHost : sendingAdmin
+                      ) ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Welcome to Messages
                   </h3>
-                  <p className="text-xs text-gray-500">
-                    {user.role === "HOST" ? "Admin" : "Host"}
+                  <p className="text-sm">
+                    Select a conversation from the sidebar to start chatting
                   </p>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
+        </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {loading && messages.length === 0 ? (
-                <MessagesSkeleton />
-              ) : messages.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  <MessageCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                  <p>No messages yet. Start the conversation!</p>
-                </div>
-              ) : (
-                messages.map((message, index) => (
-                  <div
-                    key={message.id}
-                    className={`flex items-end space-x-2 animate-in fade-in duration-300 ${
-                      message.senderId === user.id
-                        ? "justify-end flex-row-reverse space-x-reverse"
-                        : "justify-start"
-                    }`}
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    {message.senderId !== user.id && (
-                      <Avatar className="h-6 w-6 mb-1">
-                        <AvatarImage
-                          src={message.sender.avatar || undefined}
-                          alt={message.sender.name}
-                        />
-                        <AvatarFallback className="bg-gray-100 text-gray-600 text-xs">
-                          {getInitials(message.sender.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.senderId === user.id
-                          ? "bg-purple-600 text-white"
-                          : "bg-white border border-gray-200 text-gray-900"
-                      }`}
-                    >
-                      {message.senderId !== user.id && (
-                        <p className="text-xs font-medium text-gray-500 mb-1">
-                          {message.sender.name}
-                        </p>
-                      )}
-                      <p className="text-sm">{message.content}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          message.senderId === user.id
-                            ? "text-purple-200"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {formatDistanceToNow(new Date(message.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </p>
-                    </div>
-                    {message.senderId === user.id && (
-                      <Avatar className="h-6 w-6 mb-1">
-                        <AvatarImage
-                          src={user.avatar || undefined}
-                          alt={user.name}
-                        />
-                        <AvatarFallback className="bg-purple-100 text-purple-600 text-xs">
-                          {getInitials(user.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message Input */}
-            <div className="p-4 bg-white border-t border-gray-200">
-              <form onSubmit={handleSendMessage} className="flex space-x-2">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type your message..."
-                  disabled={sending}
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={sending || !newMessage.trim()}>
-                  {sending ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </form>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Select a conversation
-              </h3>
-              <p className="text-gray-500">
-                Choose a conversation from the list to start messaging.
-              </p>
-            </div>
+        {(adminError || userHostError) && (
+          <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
+            {adminError || userHostError}
           </div>
         )}
       </div>
-
-      {error && (
-        <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

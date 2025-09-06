@@ -15,11 +15,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { getHostBookings } from "@/lib/actions/booking";
+import { formatPrice } from "@/lib/utils";
 
 interface Booking {
   id: string;
   transactionId: string;
   amount: number;
+  adminCut: number;
   paidAt: Date;
   customer: {
     id: string;
@@ -36,6 +38,10 @@ interface Booking {
     name: string;
     code: string;
   } | null;
+}
+
+interface BookingsTableProps {
+  showAdminCut?: boolean;
 }
 
 export function BookingsTable() {
@@ -61,14 +67,6 @@ export function BookingsTable() {
 
     fetchBookings();
   }, []);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   if (isLoading) {
     return (
@@ -161,7 +159,7 @@ export function BookingsTable() {
               </TableCell>
               <TableCell>
                 <span className="font-medium">
-                  {formatCurrency(booking.amount)}
+                  {formatPrice(booking.amount)}
                 </span>
               </TableCell>
               <TableCell>

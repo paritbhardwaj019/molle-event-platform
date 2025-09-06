@@ -50,7 +50,6 @@ export function CustomersTable() {
     const fetchCustomers = async () => {
       try {
         const result = await getAllCustomers();
-        console.log("result", result);
 
         if (result.success && result.data) {
           setCustomers(result.data);

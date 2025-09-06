@@ -30,18 +30,20 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X } from "lucide-react";
+import { Check, X, Eye } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 
 interface InviteRequest {
   id: string;
   status: InviteStatus;
   message: string | null;
+  formData: any;
   createdAt: Date;
   user: {
     id: string;
@@ -61,7 +63,10 @@ export function InvitesTable() {
   const [invites, setInvites] = useState<InviteRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showViewDataDialog, setShowViewDataDialog] = useState(false);
   const [selectedInviteId, setSelectedInviteId] = useState<string | null>(null);
+  const [selectedInviteForView, setSelectedInviteForView] =
+    useState<InviteRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
@@ -166,6 +171,48 @@ export function InvitesTable() {
     return `https://www.instagram.com/${username}`;
   };
 
+  const handleViewData = (invite: InviteRequest) => {
+    setSelectedInviteForView(invite);
+    setShowViewDataDialog(true);
+  };
+
+  const renderFormData = (formData: any) => {
+    if (!formData || typeof formData !== "object") {
+      return <p className="text-gray-500 text-sm">No form data available</p>;
+    }
+
+    return (
+      <div className="space-y-3">
+        {Object.entries(formData).map(([key, value]) => (
+          <div key={key} className="space-y-1">
+            <label className="text-sm font-medium text-gray-700 capitalize">
+              {key
+                .replace(/([A-Z])/g, " $1")
+                .replace(/^./, (str) => str.toUpperCase())}
+            </label>
+            <div className="p-2 bg-gray-50 rounded border text-sm">
+              {Array.isArray(value) ? (
+                <div className="flex flex-wrap gap-1">
+                  {value.map((item, index) => (
+                    <Badge key={index} variant="secondary">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              ) : typeof value === "object" ? (
+                <pre className="whitespace-pre-wrap text-xs">
+                  {JSON.stringify(value, null, 2)}
+                </pre>
+              ) : (
+                <span>{String(value)}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="rounded-lg border border-gray-100 bg-white">
@@ -177,8 +224,7 @@ export function InvitesTable() {
               </TableHead>
               <TableHead>User</TableHead>
               <TableHead>Event</TableHead>
-              <TableHead>Instagram</TableHead>
-              <TableHead>Notes</TableHead>
+              <TableHead>Form Data</TableHead>
               <TableHead>Requested At</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Actions</TableHead>
@@ -203,10 +249,7 @@ export function InvitesTable() {
                   <Skeleton className="h-4 w-48" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-8 w-16" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-32" />
@@ -245,8 +288,7 @@ export function InvitesTable() {
               </TableHead>
               <TableHead>User</TableHead>
               <TableHead>Event</TableHead>
-              <TableHead>Instagram</TableHead>
-              <TableHead>Notes</TableHead>
+              <TableHead>Form Data</TableHead>
               <TableHead>Requested At</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Actions</TableHead>
@@ -286,23 +328,20 @@ export function InvitesTable() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  {extractInstagramHandle(invite.message) && (
-                    <a
-                      href={formatInstagramUrl(
-                        extractInstagramHandle(invite.message)
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
+                  {invite.formData &&
+                  Object.keys(invite.formData).length > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewData(invite)}
+                      className="flex items-center gap-1"
                     >
-                      {extractInstagramHandle(invite.message)}
-                    </a>
+                      <Eye className="h-3 w-3" />
+                      View Data
+                    </Button>
+                  ) : (
+                    <span className="text-gray-400 text-sm">No data</span>
                   )}
-                </TableCell>
-                <TableCell>
-                  <span className="line-clamp-2 text-sm text-gray-500">
-                    {extractNotes(invite.message)}
-                  </span>
                 </TableCell>
                 <TableCell>
                   {format(new Date(invite.createdAt), "MMM d, yyyy")}
@@ -313,8 +352,8 @@ export function InvitesTable() {
                       invite.status === "APPROVED"
                         ? "bg-green-50 text-green-700"
                         : invite.status === "REJECTED"
-                        ? "bg-red-50 text-red-700"
-                        : "bg-yellow-50 text-yellow-700"
+                          ? "bg-red-50 text-red-700"
+                          : "bg-yellow-50 text-yellow-700"
                     }`}
                   >
                     {invite.status}
@@ -398,6 +437,154 @@ export function InvitesTable() {
               disabled={!rejectReason.trim()}
             >
               Reject Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Data Dialog */}
+      <Dialog open={showViewDataDialog} onOpenChange={setShowViewDataDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Invite Request Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2">
+            {selectedInviteForView && (
+              <>
+                {/* User Information */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 border-b pb-2">
+                    User Information
+                  </h4>
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage
+                        src={selectedInviteForView.user.avatar || undefined}
+                      />
+                      <AvatarFallback className="bg-gray-200 text-gray-600">
+                        {selectedInviteForView.user.name
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">
+                        {selectedInviteForView.user.name}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {selectedInviteForView.user.email}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Event Information */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 border-b pb-2">
+                    Event Information
+                  </h4>
+                  <div>
+                    <Link
+                      href={`/events/${selectedInviteForView.event.slug}`}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {selectedInviteForView.event.title}
+                    </Link>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Requested on{" "}
+                      {format(
+                        new Date(selectedInviteForView.createdAt),
+                        "PPPP"
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Form Data */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 border-b pb-2">
+                    Form Submission
+                  </h4>
+                  {renderFormData(selectedInviteForView.formData)}
+                </div>
+
+                {/* Message/Notes */}
+                {selectedInviteForView.message && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-900 border-b pb-2">
+                      Additional Information
+                    </h4>
+
+                    {/* Instagram Handle */}
+                    {extractInstagramHandle(selectedInviteForView.message) && (
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          Instagram
+                        </label>
+                        <div className="p-2 bg-gray-50 rounded border text-sm">
+                          <a
+                            href={formatInstagramUrl(
+                              extractInstagramHandle(
+                                selectedInviteForView.message
+                              )
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            {extractInstagramHandle(
+                              selectedInviteForView.message
+                            )}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {extractNotes(selectedInviteForView.message) && (
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-gray-700">
+                          Notes
+                        </label>
+                        <div className="p-2 bg-gray-50 rounded border text-sm">
+                          {extractNotes(selectedInviteForView.message)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900 border-b pb-2">
+                    Status
+                  </h4>
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                        selectedInviteForView.status === "APPROVED"
+                          ? "bg-green-50 text-green-700"
+                          : selectedInviteForView.status === "REJECTED"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-yellow-50 text-yellow-700"
+                      }`}
+                    >
+                      {selectedInviteForView.status}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowViewDataDialog(false);
+                setSelectedInviteForView(null);
+              }}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

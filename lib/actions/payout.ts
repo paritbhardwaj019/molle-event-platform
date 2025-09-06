@@ -4,86 +4,34 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { PayoutStatus, UserRole } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-
-export type BankDetails = {
-  accountNumber: string;
-  ifscCode: string;
-  accountName: string;
-  phone: string;
-};
+import {
+  sendPayoutRequestedEmail,
+  sendPayoutApprovedEmail,
+  sendPayoutRejectedEmail,
+} from "@/lib/email";
 
 export type PayoutRequest = {
   id: string;
   amount: number;
   status: PayoutStatus;
+  requestedAt: Date;
+  processedAt: Date | null;
   accountNumber: string | null;
   ifscCode: string | null;
   accountName: string | null;
-  phone: string | null;
-  requestedAt: Date;
-  processedAt: Date | null;
   user: {
     id: string;
     name: string;
     email: string;
     role: UserRole;
     walletBalance: number;
+    phone: string | null;
   };
 };
 
-export async function getUserBankDetails() {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return {
-        success: false,
-        error: "You must be logged in to view bank details",
-      };
-    }
-
-    // Get the latest payout request to get bank details
-    const latestPayout = await db.payout.findFirst({
-      where: {
-        userId: session.user.id,
-      },
-      orderBy: {
-        requestedAt: "desc",
-      },
-      select: {
-        accountNumber: true,
-        ifscCode: true,
-        accountName: true,
-        user: {
-          select: {
-            phone: true,
-          },
-        },
-      },
-    });
-
-    return {
-      success: true,
-      data: latestPayout
-        ? {
-            accountNumber: latestPayout.accountNumber || "",
-            ifscCode: latestPayout.ifscCode || "",
-            accountName: latestPayout.accountName || "",
-            phone: latestPayout.user.phone || "",
-          }
-        : null,
-    };
-  } catch (error) {
-    console.error("Error fetching bank details:", error);
-    return {
-      success: false,
-      error: "Failed to fetch bank details",
-    };
-  }
-}
-
 export async function requestWithdrawal(
   amount: number,
-  bankDetails: BankDetails
+  bankAccountId?: string
 ) {
   try {
     const session = await auth();
@@ -100,7 +48,12 @@ export async function requestWithdrawal(
       select: {
         role: true,
         walletBalance: true,
-        phone: true,
+        kycRequests: {
+          where: {
+            status: "APPROVED",
+          },
+          take: 1,
+        },
       },
     });
 
@@ -109,6 +62,43 @@ export async function requestWithdrawal(
         success: false,
         error: "Only hosts and referrers can request withdrawals",
       };
+    }
+
+    // Check KYC approval for hosts
+    if (user.role === "HOST") {
+      const hasApprovedKyc = user.kycRequests.length > 0;
+      if (!hasApprovedKyc) {
+        return {
+          success: false,
+          error:
+            "KYC verification required. Please complete your KYC to request withdrawals.",
+        };
+      }
+    }
+
+    // Check bank account for referrers
+    if (user.role === "REFERRER") {
+      if (!bankAccountId) {
+        return {
+          success: false,
+          error: "Bank account is required for referrers",
+        };
+      }
+
+      // Verify bank account belongs to user
+      const bankAccount = await db.bankAccount.findUnique({
+        where: {
+          id: bankAccountId,
+          userId: session.user.id,
+        },
+      });
+
+      if (!bankAccount) {
+        return {
+          success: false,
+          error: "Invalid bank account",
+        };
+      }
     }
 
     const walletBalance = Number(user.walletBalance);
@@ -144,24 +134,59 @@ export async function requestWithdrawal(
       };
     }
 
+    // If referrer, get bank account details
+    let accountNumber = null;
+    let ifscCode = null;
+    let accountName = null;
+
+    if (user.role === "REFERRER" && bankAccountId) {
+      const bankAccount = await db.bankAccount.findUnique({
+        where: {
+          id: bankAccountId,
+        },
+        select: {
+          accountNumber: true,
+          ifscCode: true,
+          accountName: true,
+        },
+      });
+
+      if (bankAccount) {
+        accountNumber = bankAccount.accountNumber;
+        ifscCode = bankAccount.ifscCode;
+        accountName = bankAccount.accountName;
+      }
+    }
+
     // Create payout request
     const payout = await db.payout.create({
       data: {
         amount: amount,
         status: "PENDING",
-        accountNumber: bankDetails.accountNumber,
-        ifscCode: bankDetails.ifscCode,
-        accountName: bankDetails.accountName,
         userId: session.user.id,
+        accountNumber,
+        ifscCode,
+        accountName,
       },
     });
 
-    // Update user's phone if provided and different
-    if (bankDetails.phone && bankDetails.phone !== user.phone) {
-      await db.user.update({
-        where: { id: session.user.id },
-        data: { phone: bankDetails.phone },
-      });
+    // Get user details for email
+    const userDetails = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        name: true,
+        email: true,
+      },
+    });
+
+    // Send email notification to user
+    if (userDetails?.email && userDetails?.name) {
+      await sendPayoutRequestedEmail(
+        userDetails.name,
+        userDetails.email,
+        amount.toString(),
+        payout.id
+      );
     }
 
     return {
@@ -209,6 +234,17 @@ export async function getAllPayoutRequests() {
             role: true,
             walletBalance: true,
             phone: true,
+            kycRequests: {
+              where: {
+                status: "APPROVED",
+              },
+              select: {
+                accountNumber: true,
+                bankName: true,
+                bankBranch: true,
+              },
+              take: 1,
+            },
           },
         },
       },
@@ -217,24 +253,44 @@ export async function getAllPayoutRequests() {
       },
     });
 
-    const formattedPayouts: PayoutRequest[] = payouts.map((payout) => ({
-      id: payout.id,
-      amount: Number(payout.amount),
-      status: payout.status,
-      accountNumber: payout.accountNumber,
-      ifscCode: payout.ifscCode,
-      accountName: payout.accountName,
-      phone: payout.user.phone,
-      requestedAt: payout.requestedAt,
-      processedAt: payout.processedAt,
-      user: {
-        id: payout.user.id,
-        name: payout.user.name,
-        email: payout.user.email,
-        role: payout.user.role,
-        walletBalance: Number(payout.user.walletBalance),
-      },
-    }));
+    const formattedPayouts: PayoutRequest[] = payouts.map((payout) => {
+      // For hosts, get bank details from KYC if payout doesn't have them
+      let accountNumber = payout.accountNumber;
+      let bankName = null;
+      let bankBranch = null;
+
+      if (
+        payout.user.role === "HOST" &&
+        !accountNumber &&
+        payout.user.kycRequests.length > 0
+      ) {
+        const kyc = payout.user.kycRequests[0];
+        accountNumber = kyc.accountNumber;
+        bankName = kyc.bankName;
+        bankBranch = kyc.bankBranch;
+      }
+
+      return {
+        id: payout.id,
+        amount: Number(payout.amount),
+        status: payout.status,
+        requestedAt: payout.requestedAt,
+        processedAt: payout.processedAt,
+        accountNumber: payout.accountNumber || accountNumber,
+        ifscCode: payout.ifscCode,
+        accountName:
+          payout.accountName ||
+          (bankName ? `${bankName} (${bankBranch})` : null),
+        user: {
+          id: payout.user.id,
+          name: payout.user.name,
+          email: payout.user.email,
+          role: payout.user.role,
+          walletBalance: Number(payout.user.walletBalance),
+          phone: payout.user.phone,
+        },
+      };
+    });
 
     return {
       success: true,
@@ -272,6 +328,17 @@ export async function getUserPayoutRequests() {
             role: true,
             walletBalance: true,
             phone: true,
+            kycRequests: {
+              where: {
+                status: "APPROVED",
+              },
+              select: {
+                accountNumber: true,
+                bankName: true,
+                bankBranch: true,
+              },
+              take: 1,
+            },
           },
         },
       },
@@ -280,24 +347,44 @@ export async function getUserPayoutRequests() {
       },
     });
 
-    const formattedPayouts: PayoutRequest[] = payouts.map((payout) => ({
-      id: payout.id,
-      amount: Number(payout.amount),
-      status: payout.status,
-      accountNumber: payout.accountNumber,
-      ifscCode: payout.ifscCode,
-      accountName: payout.accountName,
-      phone: payout.user.phone,
-      requestedAt: payout.requestedAt,
-      processedAt: payout.processedAt,
-      user: {
-        id: payout.user.id,
-        name: payout.user.name,
-        email: payout.user.email,
-        role: payout.user.role,
-        walletBalance: Number(payout.user.walletBalance),
-      },
-    }));
+    const formattedPayouts: PayoutRequest[] = payouts.map((payout) => {
+      // For hosts, get bank details from KYC if payout doesn't have them
+      let accountNumber = payout.accountNumber;
+      let bankName = null;
+      let bankBranch = null;
+
+      if (
+        payout.user.role === "HOST" &&
+        !accountNumber &&
+        payout.user.kycRequests.length > 0
+      ) {
+        const kyc = payout.user.kycRequests[0];
+        accountNumber = kyc.accountNumber;
+        bankName = kyc.bankName;
+        bankBranch = kyc.bankBranch;
+      }
+
+      return {
+        id: payout.id,
+        amount: Number(payout.amount),
+        status: payout.status,
+        requestedAt: payout.requestedAt,
+        processedAt: payout.processedAt,
+        accountNumber: payout.accountNumber || accountNumber,
+        ifscCode: payout.ifscCode,
+        accountName:
+          payout.accountName ||
+          (bankName ? `${bankName} (${bankBranch})` : null),
+        user: {
+          id: payout.user.id,
+          name: payout.user.name,
+          email: payout.user.email,
+          role: payout.user.role,
+          walletBalance: Number(payout.user.walletBalance),
+          phone: payout.user.phone,
+        },
+      };
+    });
 
     return {
       success: true,
@@ -330,14 +417,28 @@ export async function approvePayoutRequest(payoutId: string) {
       };
     }
 
-    // Get the payout request
+    // Get the payout request with user details
     const payout = await db.payout.findUnique({
       where: { id: payoutId },
       include: {
         user: {
           select: {
             id: true,
+            name: true,
+            email: true,
             walletBalance: true,
+            role: true,
+            kycRequests: {
+              where: {
+                status: "APPROVED",
+              },
+              select: {
+                accountNumber: true,
+                bankName: true,
+                bankBranch: true,
+              },
+              take: 1,
+            },
           },
         },
       },
@@ -387,6 +488,31 @@ export async function approvePayoutRequest(payoutId: string) {
       }),
     ]);
 
+    // Prepare bank details for email
+    let accountNumber = payout.accountNumber;
+    let bankName = null;
+
+    if (
+      payout.user.role === "HOST" &&
+      !accountNumber &&
+      payout.user.kycRequests.length > 0
+    ) {
+      const kyc = payout.user.kycRequests[0];
+      accountNumber = kyc.accountNumber;
+      bankName = kyc.bankName ? `${kyc.bankName} (${kyc.bankBranch})` : null;
+    }
+
+    // Send email notification to user
+    if (payout.user.email && payout.user.name) {
+      await sendPayoutApprovedEmail(
+        payout.user.name,
+        payout.user.email,
+        payoutAmount.toString(),
+        accountNumber || undefined,
+        bankName || undefined
+      );
+    }
+
     return {
       success: true,
       message: "Payout request approved successfully",
@@ -418,9 +544,18 @@ export async function rejectPayoutRequest(payoutId: string) {
       };
     }
 
-    // Get the payout request
+    // Get the payout request with user details
     const payout = await db.payout.findUnique({
       where: { id: payoutId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!payout) {
@@ -445,6 +580,15 @@ export async function rejectPayoutRequest(payoutId: string) {
         processedAt: new Date(),
       },
     });
+
+    // Send email notification to user
+    if (payout.user.email && payout.user.name) {
+      await sendPayoutRejectedEmail(
+        payout.user.name,
+        payout.user.email,
+        Number(payout.amount).toString()
+      );
+    }
 
     return {
       success: true,

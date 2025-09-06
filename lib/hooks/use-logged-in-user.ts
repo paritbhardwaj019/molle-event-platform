@@ -13,6 +13,7 @@ interface User {
   role: UserRole;
   status: UserStatus;
   walletBalance: number;
+  adminWallet: number;
   referralCode: string | null;
   referredBy: string | null;
   createdAt: Date;
@@ -30,7 +31,6 @@ export function useLoggedInUser(): UseLoggedInUserReturn {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const router = useRouter();
 
   const clearAuth = useCallback(() => {
@@ -40,16 +40,22 @@ export function useLoggedInUser(): UseLoggedInUserReturn {
 
   const fetchUser = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch("/api/auth/me");
+      const response = await fetch("/api/auth/me", {
+        credentials: "include",
+        cache: "no-store",
+      });
 
       if (response.status === 401) {
-        console.log("User not authenticated");
+        // User not authenticated - this is expected for public pages
         clearAuth();
         return;
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // For other errors (500, 404, etc.), don't retry automatically
+        console.error(`Auth API error: ${response.status}`);
+        clearAuth();
+        return;
       }
 
       const data = await response.json();
@@ -62,32 +68,26 @@ export function useLoggedInUser(): UseLoggedInUserReturn {
 
       setUser(data.user);
       setIsAuthenticated(true);
-      setRetryCount(0); // Reset retry count on successful fetch
     } catch (error) {
+      // Network errors or other fetch errors
       console.error("Fetch user error:", error);
-
-      // Retry logic for network errors
-      if (retryCount < 3) {
-        console.log(`Retrying fetch... Attempt ${retryCount + 1}`);
-        setRetryCount((prev) => prev + 1);
-        setTimeout(() => fetchUser(), 1000 * (retryCount + 1)); // Exponential backoff
-      } else {
-        clearAuth();
-      }
+      clearAuth();
     } finally {
       setIsLoading(false);
     }
-  }, [clearAuth, retryCount]);
+  }, [clearAuth]);
 
   const refreshUser = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    setRetryCount(0); // Reset retry count on manual refresh
     await fetchUser();
   }, [fetchUser]);
 
   const logoutUser = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch("/api/auth/logout", { method: "POST" });
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -102,7 +102,7 @@ export function useLoggedInUser(): UseLoggedInUserReturn {
 
   useEffect(() => {
     fetchUser();
-  }, [fetchUser]);
+  }, []); // Only run once on mount
 
   return {
     user,

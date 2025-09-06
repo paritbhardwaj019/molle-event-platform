@@ -8,23 +8,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import { FormError } from "@/components/ui/form-error";
 import { PasswordStrength } from "@/components/ui/password-strength";
+import { GoogleSignInButton } from "@/components/ui/google-signin-button";
+import { PhoneNumberPopup } from "@/components/ui/phone-number-popup";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
-import { signup, googleSignIn } from "@/lib/actions/auth";
+import { signup, googleSignUp } from "@/lib/actions/auth";
+import { UserRole } from "@prisma/client";
 
 function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string>();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showPhonePopup, setShowPhonePopup] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   const {
     register,
@@ -36,11 +36,12 @@ function SignupContent() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       role: "USER",
-      agreedToTerms: true,
+      acceptTerms: false,
     },
   });
 
   const password = watch("password");
+  const acceptTerms = watch("acceptTerms");
 
   const onSubmit = async (data: SignupFormData) => {
     try {
@@ -48,24 +49,66 @@ function SignupContent() {
       if (result.error) {
         setServerError(result.error);
       } else {
-        router.push("/dashboard");
+        if (result.user?.role === "USER") {
+          router.push("/");
+        } else {
+          router.push("/dashboard");
+        }
+        router.refresh();
       }
     } catch (error) {
       setServerError("Something went wrong. Please try again.");
     }
   };
 
-  const handleGoogleSignIn = async (response: any) => {
+  const handleGoogleSignUp = async (credential: string) => {
     try {
-      const result = await googleSignIn(response.credential);
+      setIsGoogleLoading(true);
+      setServerError(undefined);
+
+      const result = await googleSignUp(credential, "USER");
+
       if (result.error) {
         setServerError(result.error);
       } else {
-        router.push("/dashboard");
+        // Check if user needs to provide phone number
+        if (result.requiresPhone && result.user?.id) {
+          setCurrentUserId(result.user.id);
+          setShowPhonePopup(true);
+        } else {
+          // Redirect based on user role
+          if (result.user?.role === "USER") {
+            router.push("/");
+          } else {
+            router.push("/dashboard");
+          }
+          router.refresh();
+        }
       }
     } catch (error) {
-      setServerError("Something went wrong with Google sign-in.");
+      setServerError("Something went wrong with Google sign-up.");
+    } finally {
+      setIsGoogleLoading(false);
     }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error("Google Sign-Up Error:", error);
+    setServerError("Failed to sign up with Google. Please try again.");
+    setIsGoogleLoading(false);
+  };
+
+  const handlePhoneSuccess = () => {
+    setShowPhonePopup(false);
+    // Redirect to home page after phone number is saved
+    router.push("/");
+    router.refresh();
+  };
+
+  const handlePhoneClose = () => {
+    setShowPhonePopup(false);
+    // Optionally redirect to login or show a message
+    router.push("/login");
   };
 
   return (
@@ -97,67 +140,78 @@ function SignupContent() {
 
           <div className="space-y-6">
             <h1 className="text-5xl font-bold leading-tight">
-              Join Us and Unlock Endless Possibilities!
+              Welcome to molle, find craziest events here!
             </h1>
             <p className="text-xl text-white/80">
-              Welcome to Molle, where your journey begins. Sign up now to access
-              exclusive features, personalized recommendations, and seamless
-              user experience.
+              Discover amazing events, connect with like-minded people, and
+              create unforgettable memories. Your next adventure starts here.
             </p>
 
             <div className="mt-8 space-y-4">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
-                  ⭐️
+                  🎉
                 </div>
                 <div className="flex-1">
+                  <h3 className="text-lg font-semibold">Discover Events</h3>
                   <p className="text-sm text-white/80">
-                    "We love Molle! Our event planners were using it for their
-                    projects, so we already knew what kind of experience they
-                    want."
+                    Find the perfect events that match your interests and
+                    schedule.
                   </p>
-                  <p className="text-sm font-medium mt-1">
-                    Sarah Johnson • Event Director, EventPro
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                  🤝
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold">Connect & Network</h3>
+                  <p className="text-sm text-white/80">
+                    Meet new people, build connections, and expand your network.
                   </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                  ⭐
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold">Create Memories</h3>
+                  <p className="text-sm text-white/80">
+                    Attend amazing events and create lasting memories with
+                    friends.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 p-4 bg-white/5 rounded-lg border border-white/10">
+              <p className="text-sm text-white/80">
+                "Molle is the best platform to find happening events across
+                town"
+              </p>
+              <div className="mt-2 flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-white/20"></div>
+                <div>
+                  <p className="text-sm font-medium">- Ajay Shah</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-primary to-transparent" />
+          <div className="text-center text-white/60 text-sm">
+            © 2024 Molle. All rights reserved.
+          </div>
         </div>
 
-        {/* Right Side - Sign Up Form */}
         <div className="flex items-center justify-center p-8">
           <div className="w-full max-w-md space-y-6">
             <div className="text-center">
-              <div className="inline-block md:hidden mb-6">
-                <Link
-                  href="/"
-                  className="inline-flex items-center text-white hover:text-white/90"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mr-2"
-                  >
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                  </svg>
-                  Back to Home
-                </Link>
-              </div>
-              <h2 className="text-2xl font-bold text-white">
-                Sign up to Molle
-              </h2>
-              <p className="text-muted-foreground mt-2">
-                Create your account to get started
+              <h2 className="text-3xl font-bold text-white">Create Account</h2>
+              <p className="text-white/80 mt-2">
+                Get started with your free account
               </p>
             </div>
 
@@ -166,6 +220,32 @@ function SignupContent() {
                 {serverError}
               </div>
             )}
+
+            {/* Google Sign-Up Section */}
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                <GoogleSignInButton
+                  onSuccess={handleGoogleSignUp}
+                  onError={handleGoogleError}
+                  text="signup_with"
+                  theme="outline"
+                  size="large"
+                  width={350}
+                  disabled={isGoogleLoading || showPhonePopup}
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/20" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-[#121212] px-2 text-white/70">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
@@ -196,6 +276,20 @@ function SignupContent() {
               </div>
 
               <div>
+                <Label htmlFor="phone" className="text-white">
+                  Mobile Number
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your 10-digit mobile number"
+                  className="bg-muted border-white/20 text-white"
+                  {...register("phone")}
+                />
+                <FormError message={errors.phone?.message} />
+              </div>
+
+              <div>
                 <Label htmlFor="password" className="text-white">
                   Create Password
                 </Label>
@@ -223,111 +317,73 @@ function SignupContent() {
                   className="bg-muted border-white/20 text-white"
                   {...register("confirmPassword")}
                 />
-                {errors.confirmPassword && (
-                  <FormError message={errors.confirmPassword.message} />
-                )}
+                <FormError message={errors.confirmPassword?.message} />
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="terms"
-                    {...register("agreedToTerms")}
-                    className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
-                    aria-invalid={errors.agreedToTerms ? "true" : "false"}
-                  />
-                  <label
-                    htmlFor="terms"
-                    className={`text-sm font-medium leading-none ${
-                      errors.agreedToTerms ? "text-red-500" : "text-white"
-                    }`}
+              {/* Terms and Conditions Checkbox */}
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="acceptTerms"
+                  checked={acceptTerms}
+                  onCheckedChange={(checked) =>
+                    setValue("acceptTerms", checked === true)
+                  }
+                  className="border-white/20 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
+                />
+                <div className="space-y-1 leading-none">
+                  <Label
+                    htmlFor="acceptTerms"
+                    className="text-sm cursor-pointer text-white"
                   >
-                    By signing up, you agree to our{" "}
+                    I agree to the{" "}
                     <Link
                       href="/terms"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
+                      className="text-primary hover:underline"
                       target="_blank"
+                      rel="noopener noreferrer"
                     >
-                      Terms of Service
+                      Terms & Conditions
                     </Link>{" "}
                     and{" "}
                     <Link
                       href="/privacy"
-                      className="text-violet-500 hover:text-violet-400 underline underline-offset-4"
+                      className="text-primary hover:underline"
                       target="_blank"
+                      rel="noopener noreferrer"
                     >
                       Privacy Policy
                     </Link>
-                  </label>
+                  </Label>
                 </div>
-                {errors.agreedToTerms && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors.agreedToTerms.message}
-                  </p>
-                )}
               </div>
+              <FormError message={errors.acceptTerms?.message} />
 
               <Button
                 type="submit"
-                className="w-full bg-violet-600 text-white hover:bg-violet-700 transition-colors"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Creating account...
-                  </div>
-                ) : (
-                  "Create Account"
-                )}
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#121212] px-2 text-muted-foreground">
-                    Or continue with
-                  </span>
-                </div>
-              </div>
-
-              <div
-                id="google-signin"
                 className="w-full"
-                data-callback="handleGoogleSignIn"
-              />
-
-              <p className="text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link href="/login" className="text-primary hover:underline">
-                  Log in here
-                </Link>
-              </p>
+                disabled={isSubmitting || !acceptTerms}
+              >
+                {isSubmitting ? "Creating account..." : "Create Account"}
+              </Button>
             </form>
+
+            <p className="text-center text-sm text-white/70">
+              Already have an account?{" "}
+              <Link href="/login" className="text-primary hover:underline">
+                Log in here
+              </Link>
+            </p>
           </div>
         </div>
       </div>
+
+      {showPhonePopup && (
+        <PhoneNumberPopup
+          userId={currentUserId}
+          onSuccess={handlePhoneSuccess}
+          onClose={handlePhoneClose}
+        />
+      )}
     </div>
   );
 }

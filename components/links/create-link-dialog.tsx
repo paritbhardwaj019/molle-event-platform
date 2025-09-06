@@ -20,10 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { createReferralLink } from "@/lib/actions/link";
 import { getEventsForDropdown } from "@/lib/actions/event";
-import { ReferralLinkType } from "@prisma/client";
 
 interface CreateLinkDialogProps {
   open: boolean;
@@ -38,62 +36,53 @@ export function CreateLinkDialog({
 }: CreateLinkDialogProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [linkType, setLinkType] = useState<ReferralLinkType>(
-    ReferralLinkType.SIGNUP
-  );
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [events, setEvents] = useState<{ id: string; title: string }[]>([]);
 
   useEffect(() => {
-    if (open && linkType === ReferralLinkType.EVENT) {
+    if (open) {
       fetchEvents();
     }
-  }, [open, linkType]);
+  }, [open]);
 
   const fetchEvents = async () => {
-    if (linkType === ReferralLinkType.EVENT) {
-      const result = await getEventsForDropdown(true);
+    const result = await getEventsForDropdown(false); // false to get all events, not just host events
 
-      if (result.success && result.data) {
-        setEvents(result.data);
-        if (result.data.length > 0) {
-          setSelectedEventId(result.data[0].id);
-        }
-      } else {
-        toast.error("Failed to fetch events", {
-          description:
-            result.error ||
-            "Could not load available events for referral links",
-        });
+    if (result.success && result.data) {
+      setEvents(result.data);
+      if (result.data.length > 0) {
+        setSelectedEventId(result.data[0].id);
       }
+    } else {
+      toast.error("Failed to fetch events", {
+        description:
+          result.error || "Could not load available events for referral links",
+      });
     }
   };
 
   const handleCreate = async () => {
+    if (!selectedEventId) {
+      toast.error("Please select an event", {
+        description: "You must select an event to create a referral link.",
+      });
+      return;
+    }
+
     try {
       setIsLoading(true);
 
       const result = await createReferralLink({
-        type: linkType,
-        eventId:
-          linkType === ReferralLinkType.EVENT ? selectedEventId : undefined,
+        eventId: selectedEventId,
       });
 
       if (result.success) {
         const eventName = events.find((e) => e.id === selectedEventId)?.title;
-        toast.success(
-          linkType === ReferralLinkType.SIGNUP
-            ? "Signup referral link created"
-            : "Event referral link created",
-          {
-            description:
-              linkType === ReferralLinkType.SIGNUP
-                ? "You can now share this link to earn rewards when users sign up through it"
-                : `You can now share this link to earn rewards when users book tickets for ${
-                    eventName || "this event"
-                  }`,
-          }
-        );
+        toast.success("Event referral link created", {
+          description: `You can now share this link to earn rewards when users book tickets for ${
+            eventName || "this event"
+          }`,
+        });
         onSuccess?.();
         onOpenChange(false);
       } else {
@@ -117,64 +106,39 @@ export function CreateLinkDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Referral Link</DialogTitle>
+          <DialogTitle>Create Event Referral Link</DialogTitle>
           <DialogDescription>
-            Create a new referral link for signups or events.
+            Create a new referral link for an event to earn commissions on
+            bookings.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           <div className="space-y-2">
-            <Label>Link Type</Label>
-            <RadioGroup
-              value={linkType}
-              onValueChange={async (value: ReferralLinkType) => {
-                setLinkType(value);
-                if (value === ReferralLinkType.EVENT) {
-                  setSelectedEventId("");
-                  await fetchEvents();
-                }
-              }}
-              className="flex gap-4"
+            <Label>Select Event</Label>
+            <Select
+              value={selectedEventId}
+              onValueChange={setSelectedEventId}
+              disabled={events.length === 0}
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value={ReferralLinkType.SIGNUP} id="signup" />
-                <Label htmlFor="signup">Signup</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value={ReferralLinkType.EVENT} id="event" />
-                <Label htmlFor="event">Event</Label>
-              </div>
-            </RadioGroup>
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    events.length === 0
+                      ? "No events available"
+                      : "Select an event"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {events.map((event) => (
+                  <SelectItem key={event.id} value={event.id}>
+                    {event.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
-          {linkType === ReferralLinkType.EVENT && (
-            <div className="space-y-2">
-              <Label>Select Event</Label>
-              <Select
-                value={selectedEventId}
-                onValueChange={setSelectedEventId}
-                disabled={events.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      events.length === 0
-                        ? "No events available"
-                        : "Select an event"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {events.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
-                      {event.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
 
         <DialogFooter>

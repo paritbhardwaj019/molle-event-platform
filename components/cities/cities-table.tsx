@@ -13,7 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { getAllCities, deleteCity, updateCityStatus } from "@/lib/actions/city";
+import {
+  getAllCities,
+  deleteCity,
+  updateCityStatus,
+  updateCityPriority,
+  setPopularCities,
+} from "@/lib/actions/city";
 import type { City } from "@/lib/actions/city";
 import { toast } from "sonner";
 import {
@@ -39,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 interface CitiesTableProps {
   key?: string;
@@ -52,6 +59,8 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [cityToDelete, setCityToDelete] = useState<City | null>(null);
+  const [editingPriority, setEditingPriority] = useState<string | null>(null);
+  const [priorityValue, setPriorityValue] = useState<string>("");
 
   const fetchCities = async () => {
     try {
@@ -129,6 +138,66 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
     }
   };
 
+  const handlePriorityEdit = (city: City) => {
+    setEditingPriority(city.id);
+    setPriorityValue(city.priority.toString());
+  };
+
+  const handlePrioritySave = async (cityId: string) => {
+    try {
+      const priority = parseInt(priorityValue);
+      if (isNaN(priority)) {
+        toast.error("Invalid priority value");
+        return;
+      }
+
+      const result = await updateCityPriority(cityId, priority);
+      if (result.success) {
+        toast.success("Priority updated successfully");
+        fetchCities();
+      } else {
+        toast.error("Failed to update priority", {
+          description:
+            result.error || "An error occurred while updating priority",
+        });
+      }
+    } catch (error) {
+      toast.error("Failed to update priority", {
+        description: "An unexpected error occurred",
+      });
+    } finally {
+      setEditingPriority(null);
+      setPriorityValue("");
+    }
+  };
+
+  const handlePriorityCancel = () => {
+    setEditingPriority(null);
+    setPriorityValue("");
+  };
+
+  const handleSetPopularCities = async () => {
+    try {
+      const result = await setPopularCities();
+      if (result.success) {
+        toast.success("Popular cities set successfully", {
+          description:
+            "City priorities have been updated for popular Indian cities.",
+        });
+        fetchCities();
+      } else {
+        toast.error("Failed to set popular cities", {
+          description:
+            result.error || "An error occurred while setting popular cities",
+        });
+      }
+    } catch (error) {
+      toast.error("Failed to set popular cities", {
+        description: "An unexpected error occurred",
+      });
+    }
+  };
+
   const filteredCities = cities.filter((city) => {
     if (filterType === "all") return true;
     if (filterType === "active") return city.isActive;
@@ -153,9 +222,10 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
             <TableRow className="hover:bg-gray-50">
               <TableHead>City</TableHead>
               <TableHead>State</TableHead>
+              <TableHead>Priority</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created At</TableHead>
-              <TableHead className="text-center">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -165,7 +235,7 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
                   <Skeleton className="h-4 w-[120px]" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-[100px]" />
+                  <Skeleton className="h-4 w-[60px]" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-6 w-16" />
@@ -174,7 +244,8 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
                   <Skeleton className="h-4 w-[100px]" />
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-center gap-2">
+                  <div className="flex justify-end gap-2">
+                    <Skeleton className="h-8 w-8" />
                     <Skeleton className="h-8 w-8" />
                     <Skeleton className="h-8 w-8" />
                   </div>
@@ -189,7 +260,21 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={handleSetPopularCities}
+            variant="outline"
+            className="text-sm"
+          >
+            Set Popular Cities
+          </Button>
+          <div className="text-xs text-gray-500">
+            🔥 = Top tier (90-100) | ⭐ = Second tier (80-89) | • = Third tier
+            (70-79)
+          </div>
+        </div>
+
         <Select
           value={filterType}
           onValueChange={(value: FilterType) => setFilterType(value)}
@@ -222,6 +307,49 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
                 <TableRow key={city.id}>
                   <TableCell className="font-medium">{city.name}</TableCell>
                   <TableCell>{city.state}</TableCell>
+                  <TableCell>
+                    {editingPriority === city.id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={priorityValue}
+                          onChange={(e) => setPriorityValue(e.target.value)}
+                          className="w-16 h-8 text-sm"
+                          min="0"
+                          max="100"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handlePrioritySave(city.id)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          ✓
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={handlePriorityCancel}
+                          className="h-6 px-2 text-xs"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {city.priority}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handlePriorityEdit(city)}
+                          className="h-6 px-2 text-xs text-gray-400 hover:text-gray-600"
+                        >
+                          ✎
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
@@ -288,7 +416,7 @@ export function CitiesTable({ onCityCreated }: CitiesTableProps) {
             )}
             {filteredCities.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <div className="text-gray-500">
                     {filterType === "all"
                       ? "No cities found"

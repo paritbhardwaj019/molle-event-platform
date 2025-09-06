@@ -19,6 +19,9 @@ const config: Config = {
       },
     },
     extend: {
+      spacing: {
+        "18": "4.5rem", // 72px - for bottom navigation height
+      },
       fontFamily: {
         spaceGrotesk: ["var(--font-space-grotesk)", "sans-serif"],
       },
@@ -29,21 +32,21 @@ const config: Config = {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "#8A2BE2", // Violet
+          DEFAULT: "#b81ce3", // Outer - bright purple-pink
           foreground: "#FFFFFF",
-          50: "#F3E8FF",
-          100: "#E9D5FF",
-          200: "#D8B4FE",
-          300: "#C084FC",
-          400: "#A855F7",
-          500: "#8A2BE2",
-          600: "#7C3AED",
-          700: "#6D28D9",
-          800: "#5B21B6",
-          900: "#4C1D95",
+          50: "#fdf2ff",
+          100: "#fae8ff",
+          200: "#f5d0fe",
+          300: "#f0abfc",
+          400: "#e879f9",
+          500: "#b81ce3",
+          600: "#cc18d9",
+          700: "#e316cd",
+          800: "#a21caf",
+          900: "#86198f",
         },
         secondary: {
-          DEFAULT: "#C084FC", // Soft Purple
+          DEFAULT: "#cc18d9", // Mid - medium purple-pink
           foreground: "#FFFFFF",
         },
         destructive: {
@@ -55,7 +58,7 @@ const config: Config = {
           foreground: "#B3B3B3",
         },
         accent: {
-          DEFAULT: "#00FFFF", // Cyan accent
+          DEFAULT: "#e316cd", // Inner - lighter purple-pink
           gold: "#FFD700", // Gold accent
           foreground: "hsl(var(--accent-foreground))",
         },
@@ -66,6 +69,11 @@ const config: Config = {
         card: {
           DEFAULT: "#1e1e1e",
           foreground: "#FFFFFF",
+        },
+        theme: {
+          outer: "#b81ce3", // Outer theme color
+          mid: "#cc18d9", // Mid theme color
+          inner: "#e316cd", // Inner theme color
         },
       },
       borderRadius: {
@@ -87,8 +95,13 @@ const config: Config = {
           "50%": { opacity: "0.5" },
         },
         glow: {
-          "0%, 100%": { boxShadow: "0 0 20px rgba(138, 43, 226, 0.3)" },
-          "50%": { boxShadow: "0 0 30px rgba(138, 43, 226, 0.6)" },
+          "0%, 100%": { boxShadow: "0 0 20px rgba(184, 28, 227, 0.3)" },
+          "50%": { boxShadow: "0 0 30px rgba(184, 28, 227, 0.6)" },
+        },
+        "theme-gradient": {
+          "0%": { backgroundColor: "#b81ce3" },
+          "50%": { backgroundColor: "#cc18d9" },
+          "100%": { backgroundColor: "#e316cd" },
         },
       },
       animation: {
@@ -96,10 +109,16 @@ const config: Config = {
         "accordion-up": "accordion-up 0.2s ease-out",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         glow: "glow 2s ease-in-out infinite alternate",
+        "theme-gradient": "theme-gradient 3s ease-in-out infinite",
+      },
+      backgroundImage: {
+        "theme-gradient": "linear-gradient(135deg, #b81ce3, #cc18d9, #e316cd)",
+        "theme-gradient-radial":
+          "radial-gradient(circle, #b81ce3, #cc18d9, #e316cd)",
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 } satisfies Config;
 
 export default config;

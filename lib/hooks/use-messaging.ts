@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useRealtimeMessaging } from "./use-realtime-messaging";
 
 export interface Message {
   id: string;
@@ -40,12 +41,24 @@ export interface Conversation {
   };
 }
 
-export function useMessaging() {
+export function useMessaging(userId?: string) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
+
+  // Use real-time messaging
+  const {
+    messages: realtimeMessages,
+    isConnected,
+    getConversationMessages,
+    clearConversationMessages,
+    addOptimisticMessage,
+  } = useRealtimeMessaging(userId, "admin");
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -67,32 +80,59 @@ export function useMessaging() {
     }
   }, []);
 
-  const fetchMessages = useCallback(async (conversationId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchMessages = useCallback(
+    async (conversationId: string) => {
+      try {
+        setLoading(true);
+        setError(null);
+        setSelectedConversationId(conversationId);
 
-      const response = await fetch(`/api/messages/${conversationId}`);
-      const data = await response.json();
+        const response = await fetch(`/api/messages/${conversationId}`);
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch messages");
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch messages");
+        }
+
+        // Clear real-time messages and set initial messages
+        clearConversationMessages();
+        setMessages(data.messages || []);
+
+        // Refresh unread count after fetching messages (they get marked as read)
+        fetchUnreadCount();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setLoading(false);
       }
-
-      setMessages(data.messages || []);
-      // Refresh unread count after fetching messages (they get marked as read)
-      fetchUnreadCount();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [clearConversationMessages]
+  );
 
   const sendMessage = useCallback(
     async (content: string, recipientId: string) => {
       try {
         setError(null);
+
+        // Add optimistic message
+        if (selectedConversationId && userId) {
+          const optimisticMessage = {
+            id: `temp-${Date.now()}`,
+            content,
+            senderId: userId,
+            conversationId: selectedConversationId,
+            isRead: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            sender: {
+              id: userId,
+              name: "You",
+              avatar: "",
+              role: "USER",
+            },
+          };
+          addOptimisticMessage(optimisticMessage);
+        }
 
         const response = await fetch("/api/messages", {
           method: "POST",
@@ -111,15 +151,15 @@ export function useMessaging() {
           throw new Error(data.error || "Failed to send message");
         }
 
-        // Refresh conversations and messages
-        await fetchConversations();
+        // Real-time messaging will handle updating the UI automatically
+        // No need to fetch conversations here as it causes unnecessary delay
         return data.message;
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
         throw err;
       }
     },
-    [fetchConversations]
+    [selectedConversationId, userId, addOptimisticMessage]
   );
 
   const fetchUnreadCount = useCallback(async () => {
@@ -135,9 +175,27 @@ export function useMessaging() {
     }
   }, []);
 
+  // Merge real-time messages with current messages
+  useEffect(() => {
+    if (selectedConversationId) {
+      const conversationMessages = getConversationMessages(
+        selectedConversationId
+      );
+      if (conversationMessages.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((msg) => msg.id));
+          const newMessages = conversationMessages.filter(
+            (msg) => !existingIds.has(msg.id)
+          );
+          return [...prev, ...newMessages];
+        });
+      }
+    }
+  }, [realtimeMessages, selectedConversationId, getConversationMessages]);
+
   useEffect(() => {
     fetchUnreadCount();
-    // Set up polling for unread count every 30 seconds
+    // Set up polling for unread count every 30 seconds (as backup)
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
@@ -148,6 +206,7 @@ export function useMessaging() {
     unreadCount,
     loading,
     error,
+    isConnected,
     fetchConversations,
     fetchMessages,
     sendMessage,

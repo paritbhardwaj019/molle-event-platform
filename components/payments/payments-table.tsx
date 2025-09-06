@@ -22,7 +22,7 @@ import {
   rejectPayoutRequest,
   type PayoutRequest,
 } from "@/lib/actions/payout";
-import { Check, X, Eye, Phone, CreditCard } from "lucide-react";
+import { Check, X, Eye } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -59,13 +59,16 @@ interface PaymentsTableProps {
   key?: string;
 }
 
-type FilterStatus = "all" | PayoutStatus;
+type FilterStatus = PayoutStatus | "all";
+
+const maskAccountNumber = (accountNumber: string): string => {
+  return accountNumber;
+};
 
 export function PaymentsTable({}: PaymentsTableProps) {
   const { user } = useLoggedInUser();
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [payoutToApprove, setPayoutToApprove] = useState<PayoutRequest | null>(
     null
   );
@@ -74,38 +77,33 @@ export function PaymentsTable({}: PaymentsTableProps) {
   );
   const [payoutToView, setPayoutToView] = useState<PayoutRequest | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+
+  useEffect(() => {
+    fetchPayouts();
+  }, [user]);
 
   const fetchPayouts = async () => {
+    if (!user) return;
+
     try {
+      setIsLoading(true);
       const result =
-        user?.role === "ADMIN"
+        user.role === "ADMIN"
           ? await getAllPayoutRequests()
           : await getUserPayoutRequests();
 
       if (result.success && result.data) {
         setPayouts(result.data);
       } else {
-        toast.error("Failed to load payout requests", {
-          description:
-            result.error || "There was a problem loading payout requests.",
-        });
+        toast.error("Failed to fetch payout requests");
       }
     } catch (error) {
-      console.error("Failed to fetch payouts:", error);
-      toast.error("Failed to load payout requests", {
-        description:
-          "An unexpected error occurred. Please try refreshing the page.",
-      });
+      toast.error("Failed to fetch payout requests");
     } finally {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (user) {
-      fetchPayouts();
-    }
-  }, [user]);
 
   const handleApprove = async () => {
     if (!payoutToApprove) return;
@@ -245,11 +243,6 @@ export function PaymentsTable({}: PaymentsTableProps) {
       <div className="rounded-lg border border-gray-100 bg-white">
         <div className="p-4 border-b border-gray-100">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">
-              {user?.role === "ADMIN"
-                ? "All Payout Requests"
-                : "Your Withdrawal Requests"}
-            </h3>
             <Skeleton className="h-10 w-[180px]" />
           </div>
         </div>
@@ -260,7 +253,6 @@ export function PaymentsTable({}: PaymentsTableProps) {
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requested At</TableHead>
-              <TableHead>Bank Details</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -285,9 +277,6 @@ export function PaymentsTable({}: PaymentsTableProps) {
                   <Skeleton className="h-4 w-24" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
                   <div className="flex justify-center gap-2">
                     <Skeleton className="h-8 w-8" />
                     {user?.role === "ADMIN" && <Skeleton className="h-8 w-8" />}
@@ -303,32 +292,24 @@ export function PaymentsTable({}: PaymentsTableProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end items-center">
+        <Select
+          value={filterStatus}
+          onValueChange={(value: FilterStatus) => setFilterStatus(value)}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Requests</SelectItem>
+            <SelectItem value="PENDING">Pending</SelectItem>
+            <SelectItem value="PROCESSING">Processing</SelectItem>
+            <SelectItem value="COMPLETED">Completed</SelectItem>
+            <SelectItem value="FAILED">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <div className="rounded-lg border border-gray-100 bg-white">
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">
-              {user?.role === "ADMIN"
-                ? "All Payout Requests"
-                : "Your Withdrawal Requests"}
-            </h3>
-            <Select
-              value={filterStatus}
-              onValueChange={(value: FilterStatus) => setFilterStatus(value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Requests</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="PROCESSING">Processing</SelectItem>
-                <SelectItem value="COMPLETED">Completed</SelectItem>
-                <SelectItem value="FAILED">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-gray-50">
@@ -336,7 +317,6 @@ export function PaymentsTable({}: PaymentsTableProps) {
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requested At</TableHead>
-              <TableHead>Bank Details</TableHead>
               <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -344,7 +324,7 @@ export function PaymentsTable({}: PaymentsTableProps) {
             {filteredPayouts.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={user?.role === "ADMIN" ? 6 : 5}
+                  colSpan={user?.role === "ADMIN" ? 5 : 4}
                   className="text-center py-8 text-gray-500"
                 >
                   {filterStatus === "all"
@@ -394,19 +374,6 @@ export function PaymentsTable({}: PaymentsTableProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        {payout.accountName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {payout.accountNumber
-                          ? `****${payout.accountNumber.slice(-4)}`
-                          : "N/A"}
-                      </p>
-                      <p className="text-xs text-gray-500">{payout.ifscCode}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
                     <div className="flex justify-center gap-2">
                       <TooltipProvider>
                         <Tooltip>
@@ -424,12 +391,10 @@ export function PaymentsTable({}: PaymentsTableProps) {
                             <p>View details</p>
                           </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
 
-                      {user?.role === "ADMIN" &&
-                        payout.status === "PENDING" && (
-                          <>
-                            <TooltipProvider>
+                        {user?.role === "ADMIN" &&
+                          payout.status === "PENDING" && (
+                            <>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -446,9 +411,7 @@ export function PaymentsTable({}: PaymentsTableProps) {
                                   <p>Approve payout</p>
                                 </TooltipContent>
                               </Tooltip>
-                            </TooltipProvider>
 
-                            <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -465,9 +428,9 @@ export function PaymentsTable({}: PaymentsTableProps) {
                                   <p>Reject payout</p>
                                 </TooltipContent>
                               </Tooltip>
-                            </TooltipProvider>
-                          </>
-                        )}
+                            </>
+                          )}
+                      </TooltipProvider>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -487,12 +450,13 @@ export function PaymentsTable({}: PaymentsTableProps) {
             <AlertDialogTitle>Approve Payout Request</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to approve this payout request for{" "}
-              <strong>{formatCurrency(payoutToApprove?.amount || 0)}</strong> to{" "}
-              <strong>{payoutToApprove?.user.name}</strong>?
+              <strong>{formatCurrency(payoutToApprove?.amount || 0)}</strong>{" "}
+              from <strong>{payoutToApprove?.user.name}</strong>?
               <br />
               <br />
               This will deduct the amount from their wallet balance and mark the
-              payout as completed.
+              payout as completed. The funds will be transferred to their
+              KYC-verified bank account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -587,70 +551,68 @@ export function PaymentsTable({}: PaymentsTableProps) {
                       Wallet Balance:{" "}
                       {formatCurrency(payoutToView.user.walletBalance)}
                     </p>
+                    {payoutToView.user.phone && (
+                      <p className="text-sm text-gray-500">
+                        Phone: {payoutToView.user.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Bank Account Details */}
+              {user?.role === "ADMIN" && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Bank Details
+                  </p>
+                  <div className="mt-1 space-y-1">
+                    {payoutToView.accountNumber ? (
+                      <>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-medium">Account Number:</span>{" "}
+                          {maskAccountNumber(payoutToView.accountNumber)}
+                        </p>
+                        {payoutToView.ifscCode && (
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">IFSC Code:</span>{" "}
+                            {payoutToView.ifscCode}
+                          </p>
+                        )}
+                        {payoutToView.accountName && (
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">Bank Details:</span>{" "}
+                            {payoutToView.accountName}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">
+                        No bank details available
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
 
               <div>
                 <p className="text-sm font-medium text-gray-500">
-                  Bank Details
+                  Request Details
                 </p>
-                <div className="mt-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {payoutToView.accountName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {payoutToView.accountNumber
-                          ? `****${payoutToView.accountNumber.slice(-4)}`
-                          : "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4 flex items-center justify-center">
-                      <span className="text-xs font-mono text-gray-400">
-                        IFSC
-                      </span>
-                    </div>
-                    <p className="text-sm">{payoutToView.ifscCode}</p>
-                  </div>
-                  {payoutToView.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-gray-400" />
-                      <p className="text-sm">{payoutToView.phone}</p>
-                    </div>
+                <div className="mt-1 space-y-1">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">Requested:</span>{" "}
+                    {format(new Date(payoutToView.requestedAt), "PPP")} at{" "}
+                    {format(new Date(payoutToView.requestedAt), "p")}
+                  </p>
+                  {payoutToView.processedAt && (
+                    <p className="text-sm text-gray-600">
+                      <span className="font-medium">Processed:</span>{" "}
+                      {format(new Date(payoutToView.processedAt), "PPP")} at{" "}
+                      {format(new Date(payoutToView.processedAt), "p")}
+                    </p>
                   )}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Requested At
-                  </p>
-                  <p className="text-sm">
-                    {format(
-                      new Date(payoutToView.requestedAt),
-                      "MMM d, yyyy HH:mm"
-                    )}
-                  </p>
-                </div>
-                {payoutToView.processedAt && (
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      Processed At
-                    </p>
-                    <p className="text-sm">
-                      {format(
-                        new Date(payoutToView.processedAt),
-                        "MMM d, yyyy HH:mm"
-                      )}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           )}

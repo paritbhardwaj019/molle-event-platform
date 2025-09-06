@@ -28,13 +28,13 @@ export function HostDashboard({ metrics }: HostDashboardProps) {
         title="Total Events"
         value={metrics.totalEvents}
         icon={Calendar}
-        description="Active and upcoming events"
+        description="Your created events"
       />
       <MetricsCard
         title="Total Bookings"
         value={metrics.totalBookings}
         icon={Calendar}
-        description="Across all events"
+        description="Across all your events"
         trend={{
           value: 12,
           isPositive: true,
@@ -54,6 +54,7 @@ export function HostDashboard({ metrics }: HostDashboardProps) {
         title="Total Customers"
         value={metrics.totalCustomers}
         icon={Users}
+        description="Who booked your events"
         trend={{
           value: metrics.customerGrowth,
           isPositive: metrics.customerGrowth > 0,
@@ -61,9 +62,9 @@ export function HostDashboard({ metrics }: HostDashboardProps) {
       />
       <MetricsCard
         title="Total Referrers"
-        value={metrics.totalReferrers}
+        value={metrics.totalReferrers || 0}
         icon={UserPlus}
-        description="Active referral partners"
+        description="Your referral partners"
       />
       <MetricsCard
         title="Pending Invites"

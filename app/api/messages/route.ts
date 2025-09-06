@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { broadcastMessage } from "@/app/api/realtime/messages/route";
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
         },
       });
     } else if (userRole === "HOST") {
-      // Host can only see their conversation with admin
+      // Host can see their conversation with admin
       const adminUser = await db.user.findFirst({
         where: { role: "ADMIN" },
       });
@@ -139,9 +140,16 @@ export async function POST(request: NextRequest) {
     const senderId = session.user.id;
     const senderRole = session.user.role;
 
-    if (!content || !recipientId) {
+    if (!recipientId) {
       return NextResponse.json(
-        { error: "Content and recipient ID are required" },
+        { error: "Recipient ID is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!content) {
+      return NextResponse.json(
+        { error: "Content is required" },
         { status: 400 }
       );
     }
@@ -214,7 +222,7 @@ export async function POST(request: NextRequest) {
     // Create message
     const message = await db.message.create({
       data: {
-        content,
+        content: content || "",
         senderId,
         conversationId: conversation.id,
       },
@@ -224,9 +232,29 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             avatar: true,
+            role: true,
           },
         },
       },
+    });
+
+    // Broadcast the new message to connected clients
+    const recipientIds = [conversation.hostId, conversation.adminId].filter(
+      (id) => id !== senderId
+    );
+    recipientIds.forEach((recipientId) => {
+      broadcastMessage(
+        {
+          type: "new_message",
+          message: {
+            ...message,
+            conversationId: conversation.id,
+          },
+          timestamp: Date.now(),
+        },
+        recipientId,
+        "admin"
+      );
     });
 
     return NextResponse.json({ message });

@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Ban, CheckCircle2 } from "lucide-react";
+import { Ban, CheckCircle2, Edit } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { getAllHosts, blockHost, unblockHost } from "@/lib/actions/host";
@@ -33,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UpdateHostFeeDialog } from "@/components/admin/update-host-fee-dialog";
 
 interface HostsTableProps {
   key?: string;
@@ -43,6 +44,7 @@ export function HostsTable({}: HostsTableProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hostToBlock, setHostToBlock] = useState<Host | null>(null);
   const [hostToUnblock, setHostToUnblock] = useState<Host | null>(null);
+  const [hostToUpdateFee, setHostToUpdateFee] = useState<Host | null>(null);
 
   const fetchHosts = async () => {
     try {
@@ -132,6 +134,7 @@ export function HostsTable({}: HostsTableProps) {
               <TableHead>Total Events</TableHead>
               <TableHead>Total Bookings</TableHead>
               <TableHead>Total Revenue</TableHead>
+              <TableHead>Fee %</TableHead>
               <TableHead>Last Event</TableHead>
               <TableHead className="text-end">Actions</TableHead>
             </TableRow>
@@ -156,6 +159,9 @@ export function HostsTable({}: HostsTableProps) {
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-[100px]" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-[50px]" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-[100px]" />
@@ -184,6 +190,7 @@ export function HostsTable({}: HostsTableProps) {
             <TableHead>Total Events</TableHead>
             <TableHead>Total Bookings</TableHead>
             <TableHead>Total Revenue</TableHead>
+            <TableHead>Fee %</TableHead>
             <TableHead>Last Event</TableHead>
             <TableHead className="text-end">Actions</TableHead>
           </TableRow>
@@ -207,6 +214,23 @@ export function HostsTable({}: HostsTableProps) {
               <TableCell>{host.totalEvents}</TableCell>
               <TableCell>{host.totalBookings}</TableCell>
               <TableCell>₹{host.totalRevenue.toFixed(2)}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">
+                    {host.hostFeePercentage !== null
+                      ? `${host.hostFeePercentage}%`
+                      : "Default"}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-blue-400 hover:text-blue-600 hover:bg-blue-50"
+                    onClick={() => setHostToUpdateFee(host)}
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                </div>
+              </TableCell>
               <TableCell>
                 {host.lastEventDate
                   ? format(new Date(host.lastEventDate), "MMM d, yyyy")
@@ -301,6 +325,13 @@ export function HostsTable({}: HostsTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UpdateHostFeeDialog
+        host={hostToUpdateFee}
+        open={!!hostToUpdateFee}
+        onOpenChange={() => setHostToUpdateFee(null)}
+        onSuccess={fetchHosts}
+      />
     </div>
   );
 }

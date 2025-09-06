@@ -25,7 +25,7 @@ export function CapacityStep({ form }: CapacityStepProps) {
         name="totalCapacity"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Total Capacity</FormLabel>
+            <FormLabel>Total Crowd Size</FormLabel>
             <FormControl>
               <Input
                 type="number"
@@ -54,7 +54,7 @@ export function CapacityStep({ form }: CapacityStepProps) {
                 type="number"
                 min={1}
                 placeholder="4"
-                {...field}
+                value={field.value || ""}
                 onChange={(e) =>
                   field.onChange(
                     e.target.value ? Number(e.target.value) : undefined
@@ -82,7 +82,7 @@ export function CapacityStep({ form }: CapacityStepProps) {
                   type="number"
                   min={0}
                   placeholder="18"
-                  {...field}
+                  value={field.value || ""}
                   onChange={(e) =>
                     field.onChange(
                       e.target.value ? Number(e.target.value) : undefined
@@ -109,7 +109,7 @@ export function CapacityStep({ form }: CapacityStepProps) {
                   type="number"
                   min={0}
                   placeholder="65"
-                  {...field}
+                  value={field.value || ""}
                   onChange={(e) =>
                     field.onChange(
                       e.target.value ? Number(e.target.value) : undefined

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { broadcastMessage } from "@/app/api/realtime/messages/route";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const session = await auth();
@@ -15,7 +16,7 @@ export async function GET(
 
     const userId = session.user.id;
     const userRole = session.user.role;
-    const conversationId = params.conversationId;
+    const { conversationId } = await params;
 
     // Verify user has access to this conversation
     const conversation = await db.conversation.findUnique({
@@ -63,7 +64,7 @@ export async function GET(
     });
 
     // Mark messages as read for the current user
-    await db.message.updateMany({
+    const updatedMessages = await db.message.updateMany({
       where: {
         conversationId,
         senderId: {
@@ -75,6 +76,32 @@ export async function GET(
         isRead: true,
       },
     });
+
+    // Broadcast read status if any messages were marked as read
+    if (updatedMessages.count > 0) {
+      // Get the conversation to know who to notify
+      const conversation = await db.conversation.findUnique({
+        where: { id: conversationId },
+        select: { hostId: true, adminId: true },
+      });
+
+      if (conversation) {
+        const otherUserId =
+          conversation.hostId === userId
+            ? conversation.adminId
+            : conversation.hostId;
+        broadcastMessage(
+          {
+            type: "message_read",
+            conversationId,
+            readByUserId: userId,
+            timestamp: Date.now(),
+          },
+          otherUserId,
+          "admin"
+        );
+      }
+    }
 
     return NextResponse.json({ messages });
   } catch (error) {

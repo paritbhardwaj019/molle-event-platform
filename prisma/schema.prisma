@@ -7,109 +7,87 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  USER
-  HOST
-  REFERRER
-  ADMIN
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  PENDING
-}
-
-enum EventType {
-  NORMAL
-  INVITE_ONLY
-}
-
-enum EventStatus {
-  DRAFT
-  PUBLISHED
-  CANCELLED
-  COMPLETED
-}
-
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-  COMPLETED
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-
-enum InviteStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum PayoutStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-}
-
-enum ReferralLinkType {
-  SIGNUP
-  EVENT
-}
-
 model User {
-  id            String      @id @default(cuid())
-  email         String      @unique
-  password      String?
-  name          String
-  phone         String?
-  avatar        String?
-  birthday      DateTime?
-  identity      String?
-  role          UserRole    @default(USER)
-  status        UserStatus  @default(ACTIVE)
-  emailVerified DateTime?
-  
-  googleId      String?     @unique
-  facebookId    String?     @unique
-  
-  walletBalance Decimal     @default(0) @db.Decimal(10,2)
-  referralCode  String?     @unique
-  referredBy    String?     
-  referredByHostId String?  
-  usedReferrerCodeId String?
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
-  accounts           Account[]
-  sessions           Session[]
-  hostedEvents       Event[]           @relation("EventHost")
-  bookings           Booking[]
-  reviews            Review[]
-  referrals          Referral[]        @relation("ReferrerUser")
-  referredUsers      Referral[]        @relation("ReferredUser")
-  inviteRequests     InviteRequest[]
-  payouts            Payout[]
-  referralLinks      ReferralLink[]    @relation("ReferrerLinks")
-  allowedEvents      Event[]           @relation("EventAllowedReferrers")
-  hostReferrers      User[]            @relation("HostReferrers")
-  referrerHost       User?             @relation("HostReferrers", fields: [referredByHostId], references: [id])
-  
-  hostReferrerCodes  HostReferrerCode[] @relation("HostReferrerCodes")
-  usedReferrerCode   HostReferrerCode?  @relation("ReferrerUsers", fields: [usedReferrerCodeId], references: [id])
-  
-  hostConversations  Conversation[]     @relation("HostConversations")
-  adminConversations Conversation[]     @relation("AdminConversations")
-  sentMessages       Message[]          @relation("SentMessages")
-  
+  id                         String                 @id @default(cuid())
+  email                      String                 @unique
+  password                   String?
+  name                       String
+  phone                      String?                @unique
+  avatar                     String?
+  role                       UserRole               @default(USER)
+  status                     UserStatus             @default(ACTIVE)
+  emailVerified              DateTime?
+  googleId                   String?                @unique
+  facebookId                 String?                @unique
+  walletBalance              Decimal                @default(0) @db.Decimal(10, 2)
+  referralCode               String?                @unique
+  referredBy                 String?
+  referredByHostId           String?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  usedReferrerCodeId         String?
+  birthday                   DateTime?
+  identity                   String?
+  adminWallet                Decimal                @default(0) @db.Decimal(10, 2)
+  bio                        String?
+  activePackageId            String?
+  dailySwipeRemaining        Int                    @default(0)
+  lastSwipeReset             DateTime               @default(now())
+  subscriptionEndDate        DateTime?
+  freeSwipesRemaining        Int                    @default(3)
+  gender                     Gender?
+  hostFeePercentage          Decimal?               @db.Decimal(5, 2)
+  accounts                   Account[]
+  bankAccounts               BankAccount[]          @relation("UserBankAccounts")
+  blockedByUsers             Block[]                @relation("BlockTarget")
+  blockedUsers               Block[]                @relation("BlockInitiator")
+  bookings                   Booking[]
+  receivedConnectionRequests ConnectionRequest[]    @relation("ConnectionRequestReceiver")
+  sentConnectionRequests     ConnectionRequest[]    @relation("ConnectionRequestSender")
+  adminConversations         Conversation[]         @relation("AdminConversations")
+  hostConversations          Conversation[]         @relation("HostConversations")
+  datingKycRequests          DatingKycRequest?      @relation("UserDatingKycRequests")
+  eventAttendees             EventAttendee[]        @relation("EventAttendees")
+  hostedEvents               Event[]                @relation("EventHost")
+  fcmTokens                  FCMToken[]             @relation("UserFCMTokens")
+  following                  Follow[]               @relation("UserFollows")
+  followers                  Follow[]               @relation("HostFollowers")
+  notifications              Notification[]         @relation("UserNotifications")
+  hostReferrerCodes          HostReferrerCode[]     @relation("HostReferrerCodes")
+  reportedHosts              HostReport[]           @relation("ReportedHosts")
+  reportingUsers             HostReport[]           @relation("ReportingUsers")
+  inviteForms                InviteForm[]           @relation("HostInviteForms")
+  inviteRequests             InviteRequest[]
+  kycRequests                KycRequest[]           @relation("UserKycRequests")
+  likedBy                    Like[]                 @relation("LikedBy")
+  likes                      Like[]                 @relation("UserLikes")
+  initiatedMatches           Match[]                @relation("MatchInitiator")
+  receivedMatches            Match[]                @relation("MatchReceiver")
+  sentMessages               Message[]              @relation("SentMessages")
+  payouts                    Payout[]
+  referralLinks              ReferralLink[]         @relation("ReferrerLinks")
+  referredUsers              Referral[]             @relation("ReferredUser")
+  referrals                  Referral[]             @relation("ReferrerUser")
+  reviews                    Review[]
+  sessions                   Session[]
+  sentSocialMessages         SocialMessage[]        @relation("SentSocialMessages")
+  reportedInSocial           SocialReport[]         @relation("SocialReported")
+  socialReports              SocialReport[]         @relation("SocialReporter")
+  subscriptionPayments       SubscriptionPayment[]  @relation("UserSubscriptionPayments")
+  swipePurchases             SwipePurchase[]        @relation("SwipePurchases")
+  receivedSwipes             Swipe[]                @relation("SwipeReceiver")
+  sentSwipes                 Swipe[]                @relation("SwipeSender")
+  tickets                    Ticket[]
+  hostUserConversations      UserHostConversation[] @relation("HostUserConversations")
+  userConversations          UserHostConversation[] @relation("UserConversations")
+  sentUserHostMessages       UserHostMessage[]      @relation("SentUserHostMessages")
+  userPreferences            UserPreference?        @relation("UserPreferences")
+  activePackage              SubscriptionPackage?   @relation("UserActivePackage", fields: [activePackageId], references: [id])
+  referrerHost               User?                  @relation("HostReferrers", fields: [referredByHostId], references: [id])
+  hostReferrers              User[]                 @relation("HostReferrers")
+  usedReferrerCode           HostReferrerCode?      @relation("ReferrerUsers", fields: [usedReferrerCodeId], references: [id])
+  allowedEvents              Event[]                @relation("EventAllowedReferrers")
+
   @@map("users")
 }
 
@@ -119,15 +97,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
@@ -153,42 +130,68 @@ model VerificationToken {
 }
 
 model Event {
-  id            String      @id @default(cuid())
-  title         String
-  description   String      @db.Text
-  coverImage    String
-  slug          String      @unique
-  eventType     EventType   @default(NORMAL)
-  status        EventStatus @default(DRAFT)
-  isFeatured    Boolean     @default(false)
-  
-  minAge        Int?
-  maxAge        Int?
-  
-  maxTickets    Int
-  soldTickets   Int         @default(0)
-  
-  organizerName String
-  organizerBio  String?     @db.Text
-  
-  startDate     DateTime
-  endDate       DateTime
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                 String               @id @default(cuid())
+  title              String
+  description        String
+  coverImage         String
+  slug               String               @unique
+  eventType          EventType            @default(NORMAL)
+  status             EventStatus          @default(DRAFT)
+  minAge             Int?
+  maxAge             Int?
+  maxTickets         Int
+  soldTickets        Int                  @default(0)
+  organizerName      String
+  organizerBio       String?
+  startDate          DateTime
+  endDate            DateTime
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  enableReferrers    Boolean              @default(false) @map("enable_referrers")
+  hostId             String
+  isFeatured         Boolean              @default(false)
+  location           String
+  referralPercentage Decimal              @default(5) @map("referral_percentage") @db.Decimal(5, 2)
+  isExclusive        Boolean              @default(false)
+  inviteFormId       String?
+  city               String?
+  landmark           String?
+  streetAddress      String?
+  bookings           Booking[]
+  connectionRequests ConnectionRequest[]  @relation("EventConnectionRequests")
+  amenities          EventAmenity[]
+  attendees          EventAttendee[]      @relation("EventAttendees")
+  eventPerks         EventExclusivePerk[]
+  images             EventImage[]
+  host               User                 @relation("EventHost", fields: [hostId], references: [id])
+  inviteForm         InviteForm?          @relation("EventInviteForm", fields: [inviteFormId], references: [id])
+  inviteRequests     InviteRequest[]
+  matches            Match[]              @relation("EventMatches")
+  packages           Package[]
+  referralLinks      ReferralLink[]       @relation("EventReferralLinks")
+  reviews            Review[]
+  tickets            Ticket[]
+  allowedReferrers   User[]               @relation("EventAllowedReferrers")
 
-  enableReferrers Boolean @default(false)  @map("enable_referrers")
-  
-  hostId        String
-  host          User        @relation("EventHost", fields: [hostId], references: [id])
-  amenities     EventAmenity[]
-  packages      Package[]
-  bookings      Booking[]
-  reviews       Review[]
-  inviteRequests InviteRequest[]
-  referralLinks      ReferralLink[]    @relation("EventReferralLinks")
-  allowedReferrers   User[]            @relation("EventAllowedReferrers")
-  
   @@map("events")
+}
+
+model EventImage {
+  id         String   @id @default(cuid())
+  publicId   String
+  secureUrl  String
+  width      Int
+  height     Int
+  bytes      Int
+  format     String
+  uploadedAt String
+  order      Int      @default(0)
+  eventId    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_images")
 }
 
 model Amenity {
@@ -196,240 +199,897 @@ model Amenity {
   name        String         @unique
   icon        String?
   description String?
-  
+  createdAt   DateTime       @default(now())
+  isEnabled   Boolean        @default(true)
+  updatedAt   DateTime       @default(now()) @updatedAt
   events      EventAmenity[]
-  
+
   @@map("amenities")
 }
 
 model EventAmenity {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   eventId   String
   amenityId String
-  
-  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
-  
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   @@unique([eventId, amenityId])
   @@map("event_amenities")
 }
 
 model Package {
-  id          String    @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
-  description String?   @db.Text
-  price       Decimal   @db.Decimal(10,2)
-  maxTickets  Int?      
-  benefits    String[] 
-  
+  description String?
+  price       Decimal         @db.Decimal(10, 2)
+  maxTickets  Int?
+  benefits    String[]
   eventId     String
-  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  duration    PackageDuration @default(MONTHLY)
+  allocation  Int?
   bookings    Booking[]
-  
+  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets     Ticket[]
+
   @@map("packages")
 }
 
 model Booking {
-  id              String        @id @default(cuid())
-  bookingNumber   String        @unique
-  status          BookingStatus @default(PENDING)
-  ticketCount     Int
-  totalAmount     Decimal       @db.Decimal(10,2)
-  
-  referralCode    String?
-  referralDiscount Decimal      @default(0) @db.Decimal(10,2)
-  
-  bookedAt        DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
-  eventId         String
-  event           Event         @relation(fields: [eventId], references: [id])
-  packageId       String
-  package         Package       @relation(fields: [packageId], references: [id])
-  payment         Payment?
+  id               String        @id @default(cuid())
+  bookingNumber    String        @unique
+  status           BookingStatus @default(PENDING)
+  ticketCount      Int
+  totalAmount      Decimal       @db.Decimal(10, 2)
+  referralCode     String?
+  referralDiscount Decimal       @default(0) @db.Decimal(10, 2)
+  bookedAt         DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  userId           String
+  eventId          String
+  packageId        String
   referralLinkId   String?
-  referralLink     ReferralLink?    @relation("LinkBookings", fields: [referralLinkId], references: [id])
-  
+  event            Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  package          Package       @relation(fields: [packageId], references: [id])
+  referralLink     ReferralLink? @relation("LinkBookings", fields: [referralLinkId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+  payment          Payment?
+  ticketData       TicketData?
+  tickets          Ticket[]
+
   @@map("bookings")
 }
 
+model Ticket {
+  id           String       @id @default(cuid())
+  ticketNumber String       @unique
+  qrCode       String       @unique
+  status       TicketStatus @default(ACTIVE)
+  fullName     String
+  age          Int
+  phoneNumber  String
+  ticketPrice  Decimal      @db.Decimal(10, 2)
+  verifiedAt   DateTime?
+  verifiedBy   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  userId       String
+  eventId      String
+  packageId    String
+  bookingId    String
+  booking      Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  package      Package      @relation(fields: [packageId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("tickets")
+}
+
+model TicketData {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_data")
+}
+
 model Payment {
-  id              String        @id @default(cuid())
-  razorpayOrderId String        @unique
-  razorpayPaymentId String?     @unique
-  amount          Decimal       @db.Decimal(10,2)
-  currency        String        @default("INR")
-  status          PaymentStatus @default(PENDING)
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  bookingId       String        @unique
-  booking         Booking       @relation(fields: [bookingId], references: [id])
-  
+  id                String        @id @default(cuid())
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  bookingId         String        @unique
+  cashfreeOrderId   String        @unique
+  cashfreePaymentId String?       @unique
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
   @@map("payments")
 }
 
 model Review {
   id        String   @id @default(cuid())
-  rating    Int      
-  comment   String?  @db.Text
-
+  rating    Int
+  comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
   eventId   String
-  event     Event    @relation(fields: [eventId], references: [id])
-  
+  media     Json?
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
   @@unique([userId, eventId])
   @@map("reviews")
 }
 
 model Referral {
-  id              String   @id @default(cuid())
-  referralCode    String
-  commission      Decimal  @db.Decimal(10,2)
-  isCommissionPaid Boolean @default(false)
-  
-  createdAt       DateTime @default(now())
-  
-  referrerId      String  
-  referrer        User     @relation("ReferrerUser", fields: [referrerId], references: [id])
-  referredUserId  String  
-  referredUser    User     @relation("ReferredUser", fields: [referredUserId], references: [id])
+  id               String        @id @default(cuid())
+  referralCode     String
+  commission       Decimal       @db.Decimal(10, 2)
+  isCommissionPaid Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  referrerId       String
+  referredUserId   String
   referralLinkId   String?
-  referralLink     ReferralLink?    @relation("LinkSignups", fields: [referralLinkId], references: [id])
-  
+  referralLink     ReferralLink? @relation("LinkSignups", fields: [referralLinkId], references: [id])
+  referredUser     User          @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referrer         User          @relation("ReferrerUser", fields: [referrerId], references: [id])
+
   @@unique([referrerId, referredUserId])
   @@map("referrals")
 }
 
 model Payout {
-  id          String       @id @default(cuid())
-  amount      Decimal      @db.Decimal(10,2)
-  status      PayoutStatus @default(PENDING)
-  
-  accountNumber String?
-  ifscCode     String?
-  accountName  String?
-  
-  razorpayPayoutId String? @unique
-  
-  requestedAt DateTime     @default(now())
-  processedAt DateTime?
-  
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
-  
+  id               String       @id @default(cuid())
+  amount           Decimal      @db.Decimal(10, 2)
+  status           PayoutStatus @default(PENDING)
+  accountNumber    String?
+  ifscCode         String?
+  accountName      String?
+  requestedAt      DateTime     @default(now())
+  processedAt      DateTime?
+  userId           String
+  cashfreePayoutId String?      @unique
+  user             User         @relation(fields: [userId], references: [id])
+
   @@map("payouts")
 }
 
 model InviteRequest {
   id        String       @id @default(cuid())
   status    InviteStatus @default(PENDING)
-  message   String?      @db.Text
-  
+  message   String?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
-  
   userId    String
-  user      User         @relation(fields: [userId], references: [id])
   eventId   String
-  event     Event        @relation(fields: [eventId], references: [id])
-  
+  formData  Json?
+  event     Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id])
+
   @@unique([userId, eventId])
   @@map("invite_requests")
 }
 
+model InviteForm {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  hostId      String
+  events      Event[]           @relation("EventInviteForm")
+  fields      InviteFormField[]
+  host        User              @relation("HostInviteForms", fields: [hostId], references: [id])
+
+  @@map("invite_forms")
+}
+
+model InviteFormField {
+  id          String     @id @default(cuid())
+  name        String
+  type        String
+  placeholder String?
+  required    Boolean    @default(false)
+  options     Json?
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  formId      String
+  form        InviteForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@map("invite_form_fields")
+}
+
 model ReferralLink {
-  id            String          @id @default(cuid())
-  referralCode  String          @unique
-  type          ReferralLinkType
-  eventId       String?
-  hostId        String?
-  
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
-  referrerId    String
-  referrer      User            @relation("ReferrerLinks", fields: [referrerId], references: [id])
-  event         Event?          @relation("EventReferralLinks", fields: [eventId], references: [id])
-  signups       Referral[]      @relation("LinkSignups")
-  bookings      Booking[]       @relation("LinkBookings")
-  
+  id           String           @id @default(cuid())
+  referralCode String           @unique
+  type         ReferralLinkType
+  eventId      String?
+  hostId       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  referrerId   String
+  bookings     Booking[]        @relation("LinkBookings")
+  event        Event?           @relation("EventReferralLinks", fields: [eventId], references: [id], onDelete: Cascade)
+  referrer     User             @relation("ReferrerLinks", fields: [referrerId], references: [id])
+  signups      Referral[]       @relation("LinkSignups")
+
   @@map("referral_links")
 }
 
 model HostReferrerCode {
-  id            String      @id @default(cuid())
-  code          String      @unique
-  description   String?
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
-  hostId        String
-  host          User        @relation("HostReferrerCodes", fields: [hostId], references: [id])
-  referrers     User[]      @relation("ReferrerUsers")
-  
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hostId      String
+  host        User     @relation("HostReferrerCodes", fields: [hostId], references: [id])
+  referrers   User[]   @relation("ReferrerUsers")
+
   @@map("host_referrer_codes")
 }
 
 model City {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  state       String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id        String   @id @default(cuid())
+  name      String   @unique
+  state     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  priority  Int      @default(0)
+
   @@map("cities")
 }
 
 model PlatformSetting {
-  id               String   @id @default(cuid())
-  key              String   @unique
-  value            String
-  displayName      String
-  description      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  displayName String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@map("platform_settings")
 }
 
 model Conversation {
-  id          String   @id @default(cuid())
-  hostId      String
-  adminId     String
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  host        User     @relation("HostConversations", fields: [hostId], references: [id])
-  admin       User     @relation("AdminConversations", fields: [adminId], references: [id])
-  messages    Message[]
-  
+  id        String    @id @default(cuid())
+  hostId    String
+  adminId   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  admin     User      @relation("AdminConversations", fields: [adminId], references: [id])
+  host      User      @relation("HostConversations", fields: [hostId], references: [id])
+  messages  Message[]
+
   @@unique([hostId, adminId])
   @@map("conversations")
 }
 
+model UserHostConversation {
+  id              String            @id @default(cuid())
+  userId          String
+  hostId          String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  reportReason    String?
+  reportTimestamp DateTime?
+  reportedBy      String?
+  host            User              @relation("HostUserConversations", fields: [hostId], references: [id])
+  user            User              @relation("UserConversations", fields: [userId], references: [id])
+  messages        UserHostMessage[]
+
+  @@unique([userId, hostId])
+  @@map("user_host_conversations")
+}
+
 model Message {
-  id             String   @id @default(cuid())
-  content        String   @db.Text
+  id             String       @id @default(cuid())
+  content        String
   senderId       String
   conversationId String
-  isRead         Boolean  @default(false)
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+
   @@map("messages")
+}
+
+model UserHostMessage {
+  id             String               @id @default(cuid())
+  content        String
+  senderId       String
+  conversationId String
+  isRead         Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  attachments    Json?
+  conversation   UserHostConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User                 @relation("SentUserHostMessages", fields: [senderId], references: [id])
+
+  @@map("user_host_messages")
+}
+
+model KycRequest {
+  id                          String    @id @default(cuid())
+  name                        String
+  dateOfBirth                 DateTime
+  contactNumber               String
+  whatsappNumber              String
+  email                       String
+  accountNumber               String
+  bankName                    String
+  bankBranch                  String
+  eventCity                   String
+  eventVenueDetails           String
+  eventVenueCapacity          String
+  willGetPermissions          Boolean
+  permissionsExplanation      String?
+  willHaveSecurity            Boolean
+  securityDetails             String?
+  agreeToAssessment           Boolean   @default(false)
+  understandPayouts           Boolean   @default(false)
+  agreeSafetyResponsibilities Boolean   @default(false)
+  aadharFrontUrl              String
+  aadharBackUrl               String
+  panFrontUrl                 String
+  panBackUrl                  String
+  status                      KycStatus @default(PENDING)
+  adminReason                 String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  userId                      String
+  user                        User      @relation("UserKycRequests", fields: [userId], references: [id])
+
+  @@map("kyc_requests")
+}
+
+model DatingKycRequest {
+  id          String           @id @default(cuid())
+  userId      String           @unique
+  status      DatingKycStatus  @default(PENDING)
+  docType     DatingKycDocType
+  selfieUrl   String
+  docFrontUrl String
+  docBackUrl  String?
+  reason      String?
+  approvedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation("UserDatingKycRequests", fields: [userId], references: [id])
+
+  @@map("dating_kyc_requests")
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  likerId   String
+  likedId   String
+  createdAt DateTime @default(now())
+  liked     User     @relation("LikedBy", fields: [likedId], references: [id], onDelete: Cascade)
+  liker     User     @relation("UserLikes", fields: [likerId], references: [id], onDelete: Cascade)
+
+  @@unique([likerId, likedId])
+  @@map("likes")
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  accountNumber String
+  ifscCode      String
+  accountName   String
+  bankName      String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userId        String
+  user          User     @relation("UserBankAccounts", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bank_accounts")
+}
+
+model ExclusivePerk {
+  id          String               @id @default(cuid())
+  name        String
+  description String?
+  isEnabled   Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  events      EventExclusivePerk[]
+
+  @@map("exclusive_perks")
+}
+
+model EventExclusivePerk {
+  id      String        @id @default(cuid())
+  eventId String
+  perkId  String
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  perk    ExclusivePerk @relation(fields: [perkId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, perkId])
+  @@map("event_exclusive_perks")
+}
+
+model HostReport {
+  id          String           @id @default(cuid())
+  reason      String
+  description String?
+  status      HostReportStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  hostId      String
+  reporterId  String
+  host        User             @relation("ReportedHosts", fields: [hostId], references: [id], onDelete: Cascade)
+  reporter    User             @relation("ReportingUsers", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, reporterId])
+  @@map("host_reports")
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  followerId String
+  hostId     String
+  createdAt  DateTime @default(now())
+  follower   User     @relation("UserFollows", fields: [followerId], references: [id], onDelete: Cascade)
+  host       User     @relation("HostFollowers", fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, hostId])
+  @@map("follows")
+}
+
+model EventRule {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("event_rules")
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faqs")
+}
+
+model UserPreference {
+  id                 String            @id @default(cuid())
+  userId             String            @unique
+  cityId             String?
+  maxDistance        Int               @default(50)
+  connectionTypes    ConnectionType[]
+  relationshipStatus RelationshipType?
+  ageRange           Json?
+  interests          String[]
+  showAge            Boolean           @default(true)
+  showLocation       Boolean           @default(true)
+  discoverable       Boolean           @default(true)
+  dailySwipeLimit    Int               @default(20)
+  swipesUsedToday    Int               @default(0)
+  lastSwipeReset     DateTime          @default(now())
+  bio                String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  age                Int?
+  gender             Gender?
+  photos             String[]
+  user               User              @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Swipe {
+  id        String      @id @default(cuid())
+  swiperId  String
+  swipedId  String
+  action    SwipeAction
+  createdAt DateTime    @default(now())
+  swiped    User        @relation("SwipeReceiver", fields: [swipedId], references: [id], onDelete: Cascade)
+  swiper    User        @relation("SwipeSender", fields: [swiperId], references: [id], onDelete: Cascade)
+
+  @@unique([swiperId, swipedId])
+  @@map("swipes")
+}
+
+model Match {
+  id              String              @id @default(cuid())
+  user1Id         String
+  user2Id         String
+  status          MatchStatus         @default(ACTIVE)
+  conversationId  String?             @unique
+  matchedViaEvent Boolean             @default(false)
+  eventId         String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  conversation    SocialConversation? @relation("MatchConversation", fields: [conversationId], references: [id])
+  event           Event?              @relation("EventMatches", fields: [eventId], references: [id], onDelete: Cascade)
+  user1           User                @relation("MatchInitiator", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2           User                @relation("MatchReceiver", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
+  @@map("matches")
+}
+
+model EventAttendee {
+  id        String              @id @default(cuid())
+  userId    String
+  eventId   String
+  status    EventAttendeeStatus @default(INTERESTED)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  event     Event               @relation("EventAttendees", fields: [eventId], references: [id], onDelete: Cascade)
+  user      User                @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@map("event_attendees")
+}
+
+model ConnectionRequest {
+  id         String                  @id @default(cuid())
+  senderId   String
+  receiverId String
+  eventId    String
+  status     ConnectionRequestStatus @default(PENDING)
+  message    String?
+  expiresAt  DateTime
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  event      Event                   @relation("EventConnectionRequests", fields: [eventId], references: [id], onDelete: Cascade)
+  receiver   User                    @relation("ConnectionRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User                    @relation("ConnectionRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId, eventId])
+  @@map("connection_requests")
+}
+
+model SocialConversation {
+  id        String          @id @default(cuid())
+  matchId   String?         @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  match     Match?          @relation("MatchConversation")
+  messages  SocialMessage[]
+
+  @@map("social_conversations")
+}
+
+model SocialMessage {
+  id             String             @id @default(cuid())
+  content        String
+  senderId       String
+  conversationId String
+  isRead         Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  conversation   SocialConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User               @relation("SentSocialMessages", fields: [senderId], references: [id])
+
+  @@map("social_messages")
+}
+
+model SocialReport {
+  id          String       @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  type        ReportType
+  reason      String
+  description String?
+  status      ReportStatus @default(PENDING)
+  matchId     String?
+  messageId   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  reported    User         @relation("SocialReported", fields: [reportedId], references: [id], onDelete: Cascade)
+  reporter    User         @relation("SocialReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@map("social_reports")
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  reason    String?
+  createdAt DateTime @default(now())
+  blocked   User     @relation("BlockTarget", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("BlockInitiator", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+}
+
+model SwipePurchase {
+  id                String        @id @default(cuid())
+  userId            String
+  swipeCount        Int
+  amount            Decimal       @db.Decimal(10, 2)
+  paymentStatus     PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  cashfreeOrderId   String?
+  cashfreePaymentId String?
+  user              User          @relation("SwipePurchases", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("swipe_purchases")
+}
+
+model SubscriptionPackage {
+  id               String                @id @default(cuid())
+  name             String
+  description      String?
+  price            Decimal               @db.Decimal(10, 2)
+  dailySwipeLimit  Int
+  duration         PackageDuration       @default(MONTHLY)
+  isActive         Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  allowBadge       Boolean               @default(false)
+  canSeeLikes      Boolean               @default(false)
+  priorityMatching Boolean               @default(false)
+  isHidden         Boolean               @default(false)
+  payments         SubscriptionPayment[]
+  users            User[]                @relation("UserActivePackage")
+
+  @@map("subscription_packages")
+}
+
+model SubscriptionPayment {
+  id                String              @id @default(cuid())
+  cashfreeOrderId   String              @unique
+  cashfreePaymentId String?             @unique
+  amount            Decimal             @db.Decimal(10, 2)
+  currency          String              @default("INR")
+  status            PaymentStatus       @default(PENDING)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  userId            String
+  packageId         String
+  package           SubscriptionPackage @relation(fields: [packageId], references: [id])
+  user              User                @relation("UserSubscriptionPayments", fields: [userId], references: [id])
+
+  @@map("subscription_payments")
+}
+
+model FCMToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  lastUsed  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation("UserFCMTokens", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lastUsed])
+  @@map("fcm_tokens")
+}
+
+enum UserRole {
+  USER
+  HOST
+  REFERRER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum EventType {
+  NORMAL
+  INVITE_ONLY
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+  EXPIRED
+  FULL_HOUSE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum TicketStatus {
+  ACTIVE
+  VERIFIED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum InviteStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReferralLinkType {
+  EVENT
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DatingKycStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DatingKycDocType {
+  AADHAAR
+  PASSPORT
+  DRIVING_LICENSE
+}
+
+enum HostReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum ConnectionType {
+  FRIENDS
+  DATING
+  NETWORKING
+  HANGOUT
+}
+
+enum RelationshipType {
+  SINGLE
+  TAKEN
+  COMPLICATED
+  PREFER_NOT_TO_SAY
+}
+
+enum SwipeAction {
+  LIKE
+  PASS
+}
+
+enum MatchStatus {
+  ACTIVE
+  UNMATCHED
+  BLOCKED
+}
+
+enum ConnectionRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum EventAttendeeStatus {
+  INTERESTED
+  GOING
+  MAYBE
+}
+
+enum ReportType {
+  INAPPROPRIATE_CONTENT
+  HARASSMENT
+  FAKE_PROFILE
+  SPAM
+  SAFETY_CONCERN
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  NON_BINARY
+  PREFER_NOT_TO_SAY
+}
+
+enum PackageDuration {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  LIFETIME
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  data      Json?
+  userId    String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  DATING_KYC_APPROVED
+  DATING_KYC_REJECTED
+  NEW_MATCH
+  NEW_MESSAGE
+  EVENT_REMINDER
+  BOOKING_CONFIRMED
+  PAYOUT_APPROVED
+  PAYOUT_REJECTED
+  INVITE_APPROVED
+  INVITE_REJECTED
+  GENERAL
+}
+
+model AdminPushNotification {
+  id             String   @id @default(cuid())
+  title          String
+  message        String
+  imageUrl       String?  @map("image_url")
+  linkUrl        String?  @map("link_url")
+  targetAudience String   @map("target_audience")
+  sentCount      Int      @default(0) @map("sent_count")
+  successCount   Int      @default(0) @map("success_count")
+  failureCount   Int      @default(0) @map("failure_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@index([targetAudience])
+  @@map("admin_push_notifications")
 }

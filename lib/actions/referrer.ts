@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { UserRole, UserStatus } from "@prisma/client";
 
@@ -35,10 +36,43 @@ export type Referrer = {
 
 export async function getAllReferrers() {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to view referrers",
+      };
+    }
+
+    let whereClause: any = {
+      role: "REFERRER",
+    };
+
+    // If the user is a HOST, only show referrers who have referred their events
+    if (session.user.role === "HOST") {
+      whereClause = {
+        role: "REFERRER",
+        referrals: {
+          some: {
+            referralLink: {
+              event: {
+                hostId: session.user.id,
+              },
+            },
+          },
+        },
+      };
+    }
+    // If the user is ADMIN, show all referrers (no additional filtering)
+    else if (session.user.role !== "ADMIN") {
+      return {
+        success: false,
+        error: "Unauthorized to view referrers",
+      };
+    }
+
     const referrers = await db.user.findMany({
-      where: {
-        OR: [{ role: "REFERRER" }],
-      },
+      where: whereClause,
       select: {
         id: true,
         name: true,
@@ -60,7 +94,29 @@ export async function getAllReferrers() {
                 createdAt: true,
               },
             },
+            referralLink: {
+              select: {
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    hostId: true,
+                  },
+                },
+              },
+            },
           },
+          // For hosts, only include referrals for their events
+          where:
+            session.user.role === "HOST"
+              ? {
+                  referralLink: {
+                    event: {
+                      hostId: session.user.id,
+                    },
+                  },
+                }
+              : undefined,
         },
       },
       orderBy: {

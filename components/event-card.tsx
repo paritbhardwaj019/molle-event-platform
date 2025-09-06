@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
+import { EventStatusWithLogic } from "@/components/events/event-status-badge";
+import { format } from "date-fns";
 
 interface EventCardProps {
   event: {
@@ -14,21 +16,30 @@ interface EventCardProps {
     image: string;
     date: string;
     time: string;
+    startDate: Date;
+    endDate?: Date;
     location: string;
-    price: string;
+    price?: string;
     organizer: string;
-    attendees?: number;
-    maxAttendees?: number;
     tags?: string[];
     type?: "normal" | "invite-only";
     slug?: string;
+    averageRating?: number;
+    totalReviews?: number;
+    status?: string;
+    maxTickets?: number;
+    soldTickets?: number;
   };
 }
 
 export function EventCard({ event }: EventCardProps) {
   const router = useRouter();
-  const formattedPrice = event.price.replace("$", "₹");
+  const formattedPrice = event.price?.replace("$", "₹");
   const eventUrl = `/events/${event.slug || event.id}`;
+
+  // Format date and time on client side to handle timezone correctly
+  const formattedDate = format(new Date(event.startDate), "dd/MM/yyyy");
+  const formattedTime = format(new Date(event.startDate), "h:mm a");
 
   const handleBookNow = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -52,6 +63,26 @@ export function EventCard({ event }: EventCardProps) {
               Invite Only
             </Badge>
           )}
+          {event.status &&
+            event.maxTickets &&
+            event.soldTickets &&
+            event.startDate &&
+            event.endDate && (
+              <div className="absolute top-3 left-3">
+                <EventStatusWithLogic
+                  event={{
+                    id: event.id,
+                    status: event.status as any,
+                    startDate: new Date(event.startDate),
+                    endDate: new Date(event.endDate),
+                    maxTickets: event.maxTickets,
+                    soldTickets: event.soldTickets,
+                  }}
+                  showIcon={true}
+                  useCalculatedStatus={true}
+                />
+              </div>
+            )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-80" />
         </div>
 
@@ -73,31 +104,37 @@ export function EventCard({ event }: EventCardProps) {
           </h3>
 
           <p className="text-sm font-medium text-white/60">
-            Organized by <span className="text-primary">{event.organizer}</span>
+            Hosted by <span className="text-primary">{event.organizer}</span>
           </p>
 
           <div className="space-y-2.5 text-sm text-white/70">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
-              <span>{event.date}</span>
+              <span>{formattedDate}</span>
               <Clock className="w-4 h-4 text-primary ml-2" />
-              <span>{event.time}</span>
+              <span>{formattedTime}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-primary" />
               <span>{event.location}</span>
             </div>
-            {event.attendees && event.maxAttendees && (
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary" />
-                <div className="flex items-center gap-1.5">
-                  <span>
-                    {event.attendees}/{event.maxAttendees}
-                  </span>
-                  <span className="text-white/50">attending</span>
+
+            {event.averageRating !== undefined &&
+              event.totalReviews !== undefined &&
+              event.totalReviews > 0 && (
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-yellow-400 font-medium">
+                      {event.averageRating.toFixed(1)}
+                    </span>
+                    <span className="text-white/50">
+                      ({event.totalReviews} review
+                      {event.totalReviews !== 1 ? "s" : ""})
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           <div className="flex items-center justify-between pt-3 border-t border-white/10">
