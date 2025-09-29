@@ -22,6 +22,7 @@ import {
   Camera,
 } from "lucide-react";
 import { format } from "date-fns";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface UserProfilePageProps {
   params: Promise<{
@@ -247,9 +248,16 @@ export default function UserProfilePage({ params }: UserProfilePageProps) {
                         <h4 className="font-medium mb-2 text-gray-900">
                           About
                         </h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {profile.bio || profile.userPreferences?.bio}
-                        </p>
+                        <div className="text-gray-700">
+                          <RichTextEditor
+                            content={
+                              profile.bio || profile.userPreferences?.bio || ""
+                            }
+                            onChange={() => {}} // No-op for read-only
+                            editable={false}
+                            className="border-0 p-0 bg-transparent prose-sm max-w-none [&_.ProseMirror]:p-0 [&_p]:text-gray-700 [&_strong]:text-gray-900 [&_em]:text-gray-700 [&_ul]:text-gray-700 [&_ol]:text-gray-700 [&_li]:text-gray-700 [&_h1]:text-gray-900 [&_h2]:text-gray-900 [&_h3]:text-gray-900 [&_h4]:text-gray-900 [&_h5]:text-gray-900 [&_h6]:text-gray-900"
+                          />
+                        </div>
                       </div>
                     </>
                   )}

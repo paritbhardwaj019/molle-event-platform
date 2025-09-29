@@ -314,7 +314,9 @@ export function CreateEventDialog({
 
         if (result.success && result.data) {
           toast.success("Event created successfully!");
-          router.push(`/events/${result.data.slug}`);
+          if (result.data.status === "PUBLISHED") {
+            router.push(`/events/${result.data.slug}`);
+          }
           onClose();
         } else {
           toast.error(
@@ -330,6 +332,7 @@ export function CreateEventDialog({
   const handleSaveAsDraft = () => {
     startTransition(async () => {
       const data = form.getValues();
+      // Explicitly set status to draft to override any form state
       data.status = "draft";
 
       // For drafts, we only require basic fields
@@ -353,7 +356,7 @@ export function CreateEventDialog({
 
         if (result.success && result.data) {
           toast.success("Event saved as draft!");
-          router.push(`/events/${result.data.slug}`);
+          // Don't redirect for draft events - just close the dialog
           onClose();
         } else {
           toast.error(
@@ -367,7 +370,7 @@ export function CreateEventDialog({
 
         if (result.success && result.data) {
           toast.success("Event saved as draft!");
-          router.push(`/events/${result.data.slug}`);
+          // Don't redirect for draft events - just close the dialog
           onClose();
         } else {
           toast.error(

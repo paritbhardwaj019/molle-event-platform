@@ -427,10 +427,55 @@ export async function deleteEvent(eventId: string) {
 
 export async function getEventBySlug(slug: string) {
   try {
-    const event = await db.event.findUnique({
-      where: {
-        slug,
-      },
+    const session = await auth();
+
+    // Build where clause based on user role and authentication
+    let whereClause: any = {
+      slug,
+    };
+
+    // If no session, only show published events
+    if (!session?.user?.id) {
+      whereClause.status = EventStatus.PUBLISHED;
+    } else {
+      // Get user details to check role
+      const user = await db.user.findUnique({
+        where: { id: session.user.id },
+        include: {
+          kycRequests: {
+            where: {
+              status: "APPROVED",
+            },
+            take: 1,
+          },
+        },
+      });
+
+      if (!user) {
+        whereClause.status = EventStatus.PUBLISHED;
+      } else {
+        // Admin can see all events
+        if (user.role === "ADMIN") {
+          // No additional restrictions for admin
+        }
+        // Host can only see their own events (including drafts) and only if KYC is approved
+        else if (user.role === "HOST") {
+          const hasApprovedKyc = user.kycRequests.length > 0;
+          if (!hasApprovedKyc) {
+            whereClause.status = EventStatus.PUBLISHED;
+          } else {
+            whereClause.hostId = session.user.id;
+          }
+        }
+        // Regular users and referrers can only see published events
+        else {
+          whereClause.status = EventStatus.PUBLISHED;
+        }
+      }
+    }
+
+    const event = await db.event.findFirst({
+      where: whereClause,
       include: {
         images: {
           orderBy: {
@@ -804,7 +849,7 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
       })),
     });
 
-    // Handle packages more carefully to avoid foreign key constraint violations
+    // Handle packages more carefully to preserve existing packages
     const existingPackages = await db.package.findMany({
       where: { eventId },
       include: {
@@ -816,9 +861,50 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
       },
     });
 
-    // Delete packages that don't have any bookings
+    // Create a map of existing packages by name for easy lookup
+    const existingPackageMap = new Map(
+      existingPackages.map((pkg) => [pkg.name, pkg])
+    );
+
+    // Process each package from the form data
+    for (const newPkg of validatedData.packages) {
+      const existingPkg = existingPackageMap.get(newPkg.name);
+
+      if (existingPkg) {
+        // Update existing package
+        await db.package.update({
+          where: { id: existingPkg.id },
+          data: {
+            description: newPkg.description,
+            price: newPkg.price,
+            maxTickets: newPkg.maxTicketsPerBooking,
+            allocation: newPkg.allocation,
+            benefits: newPkg.includedItems,
+          },
+        });
+      } else {
+        // Create new package
+        await db.package.create({
+          data: {
+            eventId,
+            name: newPkg.name,
+            description: newPkg.description,
+            price: newPkg.price,
+            maxTickets: newPkg.maxTicketsPerBooking,
+            allocation: newPkg.allocation,
+            benefits: newPkg.includedItems,
+          },
+        });
+      }
+    }
+
+    // Find packages that are no longer in the form data and delete them
+    // Only delete packages that don't have any bookings to avoid data loss
+    const formPackageNames = new Set(
+      validatedData.packages.map((pkg) => pkg.name)
+    );
     const packagesToDelete = existingPackages.filter(
-      (pkg) => pkg._count.bookings === 0
+      (pkg) => !formPackageNames.has(pkg.name) && pkg._count.bookings === 0
     );
 
     if (packagesToDelete.length > 0) {
@@ -828,51 +914,6 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
             in: packagesToDelete.map((pkg) => pkg.id),
           },
         },
-      });
-    }
-
-    // Update existing packages that have bookings (to preserve booking references)
-    const packagesWithBookings = existingPackages.filter(
-      (pkg) => pkg._count.bookings > 0
-    );
-
-    // Update existing packages that have bookings
-    for (const existingPkg of packagesWithBookings) {
-      const matchingNewPkg = validatedData.packages.find(
-        (newPkg) => newPkg.name === existingPkg.name
-      );
-
-      if (matchingNewPkg) {
-        await db.package.update({
-          where: { id: existingPkg.id },
-          data: {
-            description: matchingNewPkg.description,
-            price: matchingNewPkg.price,
-            maxTickets: matchingNewPkg.maxTicketsPerBooking,
-            allocation: matchingNewPkg.allocation,
-            benefits: matchingNewPkg.includedItems,
-          },
-        });
-      }
-    }
-
-    // Create new packages that don't exist yet
-    const existingPackageNames = existingPackages.map((pkg) => pkg.name);
-    const newPackages = validatedData.packages.filter(
-      (pkg) => !existingPackageNames.includes(pkg.name)
-    );
-
-    if (newPackages.length > 0) {
-      await db.package.createMany({
-        data: newPackages.map((pkg) => ({
-          eventId,
-          name: pkg.name,
-          description: pkg.description,
-          price: pkg.price,
-          maxTickets: pkg.maxTicketsPerBooking,
-          allocation: pkg.allocation,
-          benefits: pkg.includedItems,
-        })),
       });
     }
 

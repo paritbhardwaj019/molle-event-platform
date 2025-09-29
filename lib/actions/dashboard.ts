@@ -36,7 +36,10 @@ export async function getHostMetrics() {
         event: {
           hostId: session.user.id,
         },
-        status: { in: ["COMPLETED"] },
+        status: "CONFIRMED",
+        payment: {
+          status: "COMPLETED",
+        },
       },
     }),
     db.user.count({
@@ -74,7 +77,10 @@ export async function getHostMetrics() {
         event: {
           hostId: session.user.id,
         },
-        status: "COMPLETED",
+        status: "CONFIRMED",
+        payment: {
+          status: "COMPLETED",
+        },
         updatedAt: {
           gte: startOfCurrentMonth,
         },
@@ -88,7 +94,10 @@ export async function getHostMetrics() {
         event: {
           hostId: session.user.id,
         },
-        status: "COMPLETED",
+        status: "CONFIRMED",
+        payment: {
+          status: "COMPLETED",
+        },
         updatedAt: {
           gte: startOfLastMonth,
           lt: startOfCurrentMonth,

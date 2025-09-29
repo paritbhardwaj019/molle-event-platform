@@ -66,6 +66,12 @@ export async function getAllHosts() {
             id: true,
             startDate: true,
             bookings: {
+              where: {
+                status: "CONFIRMED",
+                payment: {
+                  status: "COMPLETED",
+                },
+              },
               select: {
                 totalAmount: true,
               },
@@ -148,6 +154,12 @@ export async function getHostById(id: string) {
         hostedEvents: {
           include: {
             bookings: {
+              where: {
+                status: "CONFIRMED",
+                payment: {
+                  status: "COMPLETED",
+                },
+              },
               include: {
                 payment: true,
               },
@@ -357,6 +369,9 @@ export async function getHostEvents() {
         bookings: {
           where: {
             status: "CONFIRMED",
+            payment: {
+              status: "COMPLETED",
+            },
           },
           include: {
             payment: true,
@@ -544,6 +559,9 @@ export async function getHostReferrals() {
           not: null,
         },
         status: BookingStatus.CONFIRMED,
+        payment: {
+          status: "COMPLETED",
+        },
       },
       include: {
         user: {
@@ -817,9 +835,9 @@ export async function reportHost(data: {
     // Check if user has already reported this host
     const existingReport = await db.hostReport.findUnique({
       where: {
-        reportedHostId_reportingUserId: {
-          reportedHostId: data.hostId,
-          reportingUserId: session.user.id,
+        hostId_reporterId: {
+          hostId: data.hostId,
+          reporterId: session.user.id,
         },
       },
     });
@@ -830,8 +848,8 @@ export async function reportHost(data: {
 
     const report = await db.hostReport.create({
       data: {
-        reportedHostId: data.hostId,
-        reportingUserId: session.user.id,
+        hostId: data.hostId,
+        reporterId: session.user.id,
         reason: data.reason,
         description: data.description,
       },
@@ -863,7 +881,7 @@ export async function getAllHostReports() {
 
     const reports = await db.hostReport.findMany({
       include: {
-        reportedHost: {
+        host: {
           select: {
             id: true,
             name: true,
@@ -872,7 +890,7 @@ export async function getAllHostReports() {
             status: true,
           },
         },
-        reportingUser: {
+        reporter: {
           select: {
             id: true,
             name: true,
@@ -894,8 +912,7 @@ export async function getAllHostReports() {
 
 export async function updateHostReportStatus(
   reportId: string,
-  status: "REVIEWED" | "RESOLVED" | "DISMISSED",
-  adminNotes?: string
+  status: "REVIEWED" | "RESOLVED" | "DISMISSED"
 ) {
   try {
     const session = await auth();
@@ -916,7 +933,6 @@ export async function updateHostReportStatus(
       where: { id: reportId },
       data: {
         status,
-        adminNotes,
       },
     });
 

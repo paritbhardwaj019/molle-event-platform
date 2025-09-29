@@ -821,11 +821,6 @@ export default function BookingPage() {
                               <div className="flex items-center justify-between mb-6 p-4 bg-gray-900/50 rounded-xl">
                                 <span className="text-white font-medium text-base">
                                   Quantity
-                                  {pkg.allocation && (
-                                    <span className="text-sm text-gray-400 ml-2">
-                                      ({pkg.remainingTickets} available)
-                                    </span>
-                                  )}
                                 </span>
                                 <div className="flex items-center space-x-3">
                                   <Button

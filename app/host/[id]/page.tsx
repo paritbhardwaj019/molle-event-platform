@@ -30,6 +30,7 @@ import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 interface PublicHostProfilePageProps {
   params: Promise<{
@@ -113,9 +114,14 @@ export default function PublicHostProfilePage({
                 {host.bio && (
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-2">About</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {host.bio}
-                    </p>
+                    <div className="text-gray-700">
+                      <RichTextEditor
+                        content={host.bio || ""}
+                        onChange={() => {}} // No-op for read-only
+                        editable={false}
+                        className="border-0 p-0 bg-transparent prose-sm max-w-none [&_.ProseMirror]:p-0 [&_p]:text-gray-700 [&_strong]:text-gray-900 [&_em]:text-gray-700 [&_ul]:text-gray-700 [&_ol]:text-gray-700 [&_li]:text-gray-700 [&_h1]:text-gray-900 [&_h2]:text-gray-900 [&_h3]:text-gray-900 [&_h4]:text-gray-900 [&_h5]:text-gray-900 [&_h6]:text-gray-900"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -237,9 +243,14 @@ export default function PublicHostProfilePage({
                               <h3 className="text-xl font-bold text-gray-900 mb-2">
                                 {event.title}
                               </h3>
-                              <p className="text-gray-600 mb-4">
-                                {event.description}
-                              </p>
+                              <div className="text-gray-600 mb-4">
+                                <RichTextEditor
+                                  content={event.description || ""}
+                                  onChange={() => {}}
+                                  editable={false}
+                                  className="border-0 p-0 bg-transparent prose-sm max-w-none [&_.ProseMirror]:p-0 [&_p]:text-gray-600 [&_strong]:text-gray-800 [&_em]:text-gray-600 [&_ul]:text-gray-600 [&_ol]:text-gray-600 [&_li]:text-gray-600 [&_h1]:text-gray-800 [&_h2]:text-gray-800 [&_h3]:text-gray-800 [&_h4]:text-gray-800 [&_h5]:text-gray-800 [&_h6]:text-gray-800"
+                                />
+                              </div>
                             </div>
                             <div className="text-right">
                               <p className="text-2xl font-bold text-purple-600">
@@ -280,13 +291,7 @@ export default function PublicHostProfilePage({
                             </div>
                           </div>
 
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                              <span className="text-sm text-gray-500">
-                                {event.soldTickets} / {event.maxTickets} tickets
-                                sold
-                              </span>
-                            </div>
+                          <div className="flex justify-end items-center">
                             <Link href={`/events/${event.slug}`}>
                               <Button className="bg-purple-600 hover:bg-purple-700">
                                 <ExternalLink className="h-4 w-4 mr-2" />

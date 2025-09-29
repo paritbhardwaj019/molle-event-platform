@@ -64,6 +64,11 @@ const truncateText = (text: string, maxLength: number) => {
   return text.slice(0, maxLength) + "...";
 };
 
+const stripHtmlTags = (html: string) => {
+  if (!html) return "";
+  return html.replace(/<[^>]*>/g, "");
+};
+
 interface EventsTableProps {
   onEditEvent?: (event: EventFormData & { id: string }) => void;
 }
@@ -307,7 +312,7 @@ export function EventsTable({ onEditEvent }: EventsTableProps) {
                     <div className="space-y-1">
                       <span className="font-medium">{event.title}</span>
                       <p className="text-sm text-gray-500 line-clamp-1">
-                        {truncateText(event.description, 60)}
+                        {truncateText(stripHtmlTags(event.description), 60)}
                       </p>
                     </div>
                   </div>
@@ -332,7 +337,13 @@ export function EventsTable({ onEditEvent }: EventsTableProps) {
                           ? "bg-gray-50 text-gray-700"
                           : event.status === "CANCELLED"
                             ? "bg-red-50 text-red-700"
-                            : "bg-blue-50 text-blue-700"
+                            : event.status === "EXPIRED"
+                              ? "bg-orange-50 text-orange-700"
+                              : event.status === "COMPLETED"
+                                ? "bg-blue-50 text-blue-700"
+                                : event.status === "FULL_HOUSE"
+                                  ? "bg-purple-50 text-purple-700"
+                                  : "bg-gray-50 text-gray-700"
                     }`}
                   >
                     {event.status}
