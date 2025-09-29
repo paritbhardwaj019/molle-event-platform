@@ -83,6 +83,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Molle" />
+        <meta name="apple-mobile-web-app-orientations" content="portrait" />
+        <meta
+          name="apple-itunes-app"
+          content="app-id=[YOUR_APP_ID], app-argument=https://molle.com"
+        />
         <meta
           name="description"
           content="Discover, host, and manage amazing events with Molle"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Molle - Event Platform</string>
+    <string name="app_short_name">Molle</string>
+    <string name="app_description">Discover, host, and manage amazing events with Molle. Connect with people, build communities, and create unforgettable experiences.</string>
+</resources>

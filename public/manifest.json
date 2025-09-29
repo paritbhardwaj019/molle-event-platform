@@ -10,6 +10,18 @@
   "scope": "/",
   "lang": "en",
   "categories": ["social", "events", "lifestyle", "entertainment"],
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.molle.events",
+      "id": "com.molle.events"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/molle-events/id[YOUR_APP_ID]"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
