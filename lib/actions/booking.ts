@@ -2,7 +2,12 @@
 
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { BookingStatus, Prisma, PaymentStatus } from "@prisma/client";
+import {
+  BookingStatus,
+  Prisma,
+  PaymentStatus,
+  TicketStatus,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { format } from "date-fns";
 import { startOfDay } from "date-fns";
@@ -239,9 +244,16 @@ export async function getHostBookings() {
           hostId: user.role === "HOST" ? session.user.id : undefined,
         },
         status: "CONFIRMED",
-        payment: {
-          status: "COMPLETED",
-        },
+        OR: [
+          {
+            payment: {
+              status: "COMPLETED",
+            },
+          },
+          {
+            totalAmount: 0, // Include free bookings
+          },
+        ],
       },
       include: {
         user: {
@@ -284,15 +296,19 @@ export async function getHostBookings() {
     });
 
     const formattedBookings = bookings.map((booking) => {
-      const amount = Number(booking.payment?.amount || 0);
-      const adminCut = (amount * platformFeePercentage) / 100;
+      const amount = Number(
+        booking.payment?.amount || booking.totalAmount || 0
+      );
+      const adminCut = amount > 0 ? (amount * platformFeePercentage) / 100 : 0;
 
       return {
         id: booking.id,
-        transactionId: booking.payment?.cashfreePaymentId || "",
+        transactionId:
+          booking.payment?.cashfreePaymentId || (amount === 0 ? "FREE" : ""),
         amount,
         adminCut,
         paidAt: booking.payment?.createdAt || booking.bookedAt,
+        ticketCount: booking.ticketCount,
         customer: {
           id: booking.user.id,
           name: booking.user.name,
@@ -358,9 +374,16 @@ export async function getBookingStats() {
           hostId: user.role === "HOST" ? session.user.id : undefined,
         },
         status: "CONFIRMED",
-        payment: {
-          status: "COMPLETED",
-        },
+        OR: [
+          {
+            payment: {
+              status: "COMPLETED",
+            },
+          },
+          {
+            totalAmount: 0, // Include free bookings
+          },
+        ],
       },
       _sum: {
         totalAmount: true,
@@ -376,12 +399,22 @@ export async function getBookingStats() {
           hostId: user.role === "HOST" ? session.user.id : undefined,
         },
         status: "CONFIRMED",
-        payment: {
-          status: "COMPLETED",
-          createdAt: {
-            gte: today,
+        OR: [
+          {
+            payment: {
+              status: "COMPLETED",
+              createdAt: {
+                gte: today,
+              },
+            },
           },
-        },
+          {
+            totalAmount: 0, // Include free bookings
+            bookedAt: {
+              gte: today,
+            },
+          },
+        ],
       },
       _sum: {
         totalAmount: true,
@@ -428,6 +461,274 @@ export async function getBookingStats() {
     return {
       success: false,
       error: "Failed to fetch booking stats",
+    };
+  }
+}
+
+export async function getBookingTickets(bookingId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to view tickets",
+      };
+    }
+
+    // First, get the booking to check access permissions
+    const booking = await db.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        event: {
+          select: {
+            hostId: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      return {
+        success: false,
+        error: "Booking not found",
+      };
+    }
+
+    // Check if user is the event host, admin, or the booking owner
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
+    });
+
+    const isHost = booking.event.hostId === session.user.id;
+    const isAdmin = user?.role === "ADMIN";
+    const isBookingOwner = booking.userId === session.user.id;
+
+    if (!isHost && !isAdmin && !isBookingOwner) {
+      return {
+        success: false,
+        error: "You don't have permission to view these tickets",
+      };
+    }
+
+    // Fetch tickets for this booking
+    const tickets = await db.ticket.findMany({
+      where: {
+        bookingId: bookingId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+          },
+        },
+        package: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        bookingNumber: booking.bookingNumber,
+        eventTitle: booking.event.title,
+        tickets: tickets.map((ticket) => ({
+          id: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          fullName: ticket.fullName,
+          age: ticket.age,
+          phoneNumber: ticket.phoneNumber,
+          status: ticket.status,
+          ticketPrice: Number(ticket.ticketPrice),
+          verifiedAt: ticket.verifiedAt,
+          packageName: ticket.package.name,
+          user: {
+            id: ticket.user.id,
+            name: ticket.user.name,
+            email: ticket.user.email,
+            avatar: ticket.user.avatar,
+          },
+        })),
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching booking tickets:", error);
+    return {
+      success: false,
+      error: "Failed to fetch tickets",
+    };
+  }
+}
+
+export async function createFreeBooking(data: {
+  eventId: string;
+  packageSelections: Array<{
+    packageId: string;
+    quantity: number;
+    ticketHolders: Array<{
+      fullName: string;
+      age: number;
+      phoneNumber: string;
+    }>;
+  }>;
+  referralCode?: string;
+}) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return {
+        success: false,
+        error: "You must be logged in to book tickets",
+      };
+    }
+
+    // Validate event exists and is published
+    const event = await db.event.findUnique({
+      where: { id: data.eventId },
+      include: {
+        packages: true,
+      },
+    });
+
+    if (!event) {
+      return {
+        success: false,
+        error: "Event not found",
+      };
+    }
+
+    if (event.status !== "PUBLISHED") {
+      return {
+        success: false,
+        error: "Event is not available for booking",
+      };
+    }
+
+    // Validate all packages are free
+    const packageIds = data.packageSelections.map((s) => s.packageId);
+    const packages = event.packages.filter((p) => packageIds.includes(p.id));
+
+    const hasNonFreePackage = packages.some((p) => Number(p.price) > 0);
+    if (hasNonFreePackage) {
+      return {
+        success: false,
+        error:
+          "This booking contains paid tickets. Please use the payment flow.",
+      };
+    }
+
+    // Calculate total tickets
+    const totalTickets = data.packageSelections.reduce(
+      (sum, s) => sum + s.quantity,
+      0
+    );
+
+    // Check availability
+    const currentSoldTickets = event.soldTickets || 0;
+    if (currentSoldTickets + totalTickets > event.maxTickets) {
+      return {
+        success: false,
+        error: "Not enough tickets available",
+      };
+    }
+
+    // Generate booking number
+    const bookingNumber = `BK${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+    // Handle referral code if provided
+    let referralLink = null;
+    if (data.referralCode) {
+      referralLink = await db.referralLink.findFirst({
+        where: {
+          referralCode: data.referralCode,
+          eventId: data.eventId,
+        },
+      });
+    }
+
+    // Create booking with tickets in a transaction
+    const booking = await db.$transaction(async (tx) => {
+      // Create the booking
+      const newBooking = await tx.booking.create({
+        data: {
+          userId: session.user.id,
+          eventId: data.eventId,
+          packageId: data.packageSelections[0].packageId,
+          status: "CONFIRMED",
+          bookingNumber,
+          ticketCount: totalTickets,
+          totalAmount: 0,
+          bookedAt: new Date(),
+          referralLinkId: referralLink?.id,
+        },
+      });
+
+      // Create tickets for each package selection
+      const ticketsToCreate = [];
+      for (const selection of data.packageSelections) {
+        const pkg = packages.find((p) => p.id === selection.packageId);
+        if (!pkg) continue;
+
+        for (const holder of selection.ticketHolders) {
+          const ticketNumber = `TKT${Date.now()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          ticketsToCreate.push({
+            userId: session.user.id,
+            eventId: data.eventId,
+            packageId: selection.packageId,
+            bookingId: newBooking.id,
+            ticketNumber,
+            qrCode: ticketNumber, // Use ticket number as QR code for now
+            fullName: holder.fullName,
+            age: holder.age,
+            phoneNumber: holder.phoneNumber,
+            status: TicketStatus.ACTIVE,
+            ticketPrice: 0,
+          });
+        }
+      }
+
+      await tx.ticket.createMany({
+        data: ticketsToCreate,
+      });
+
+      // Update event sold tickets count
+      await tx.event.update({
+        where: { id: data.eventId },
+        data: {
+          soldTickets: {
+            increment: totalTickets,
+          },
+        },
+      });
+
+      return newBooking;
+    });
+
+    revalidatePath("/bookings");
+    revalidatePath(`/events/${event.slug}`);
+
+    return {
+      success: true,
+      data: {
+        bookingId: booking.id,
+        bookingNumber: booking.bookingNumber,
+      },
+    };
+  } catch (error) {
+    console.error("Error creating free booking:", error);
+    return {
+      success: false,
+      error: "Failed to create booking",
     };
   }
 }

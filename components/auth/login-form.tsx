@@ -16,12 +16,16 @@ import {
 } from "@/components/ui/google-signin-button";
 import { loginSchema, type LoginFormData } from "@/lib/validations/auth";
 import { login, googleSignIn } from "@/lib/actions/auth";
+import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
+import ForgotPasswordForm from "./forgot-password-form";
 
 export default function LoginForm() {
   const router = useRouter();
   const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [serverError, setServerError] = useState<string>();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const { refreshUser } = useLoggedInUser();
 
   const {
     register,
@@ -37,6 +41,8 @@ export default function LoginForm() {
       if (result.error) {
         setServerError(result.error);
       } else {
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
         router.push("/dashboard");
       }
     } catch (error) {
@@ -53,6 +59,8 @@ export default function LoginForm() {
       if (result.error) {
         setServerError(result.error);
       } else {
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
         router.push("/dashboard");
       }
     } catch (error) {
@@ -67,6 +75,25 @@ export default function LoginForm() {
     setServerError("Failed to sign in with Google. Please try again.");
     setIsGoogleLoading(false);
   };
+
+  const handleForgotPasswordSuccess = () => {
+    setShowForgotPassword(false);
+    setShowEmailLogin(true);
+    setServerError(undefined);
+  };
+
+  // Show forgot password form
+  if (showForgotPassword) {
+    return (
+      <ForgotPasswordForm
+        onBack={() => {
+          setShowForgotPassword(false);
+          setShowEmailLogin(true);
+        }}
+        onSuccess={handleForgotPasswordSuccess}
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-md space-y-6 bg-white p-8 rounded-lg shadow-lg">
@@ -115,12 +142,13 @@ export default function LoginForm() {
                 Remember me
               </label>
             </div>
-            <Link
-              href="/forgot-password"
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
               className="text-sm text-primary hover:underline"
             >
               Forgot password?
-            </Link>
+            </button>
           </div>
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? "Signing in..." : "Sign in"}

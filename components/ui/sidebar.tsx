@@ -33,6 +33,7 @@ import {
   Search,
   MessageCircle,
   Bell,
+  UserCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -284,6 +285,16 @@ const baseRoutes = {
       href: "/dashboard/admin/push-notifications",
       icon: Bell,
     },
+    // {
+    //   name: "Impersonate User",
+    //   href: "/dashboard/admin/impersonate",
+    //   icon: UserCheck,
+    // },
+    // {
+    //   name: "Manual Ticket Release",
+    //   href: "/dashboard/admin/manual-release",
+    //   icon: Ticket,
+    // },
   ],
 };
 

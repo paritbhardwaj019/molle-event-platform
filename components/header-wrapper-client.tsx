@@ -48,6 +48,7 @@ export function HeaderWrapperClient() {
     "/dashboard/admin/dating-kyc",
     "/dashboard/admin/reviews",
     "/dashboard/admin/push-notifications",
+    "/dashboard/admin/impersonate",
   ];
 
   if (

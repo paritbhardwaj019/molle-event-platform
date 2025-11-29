@@ -15,8 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StartConversation } from "@/components/messaging/start-conversation";
-import { Send, MessageCircle, Users, Shield } from "lucide-react";
+import { Send, MessageCircle, Users, Shield, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { BOTTOM_NAV_HEIGHT } from "@/components/mobile-bottom-navigation";
 
 export default function MessagesPage() {
   const { user } = useLoggedInUser();
@@ -55,8 +56,21 @@ export default function MessagesPage() {
   const [sendingUserHost, setSendingUserHost] = useState(false);
   const [adminId, setAdminId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("users");
+  const [isMobile, setIsMobile] = useState(false);
   const adminMessagesEndRef = useRef<HTMLDivElement>(null);
   const userHostMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -181,7 +195,7 @@ export default function MessagesPage() {
   };
 
   const ConversationSkeleton = () => (
-    <div className="p-3 space-y-3">
+    <div className="px-4 py-3 space-y-3">
       {[...Array(3)].map((_, i) => (
         <div key={i} className="flex items-center space-x-3">
           <Skeleton className="h-10 w-10 rounded-full" />
@@ -198,16 +212,48 @@ export default function MessagesPage() {
     return <div>Loading...</div>;
   }
 
+  const hasSelectedConversation =
+    (activeTab === "users" && userHostSelectedConversation) ||
+    (activeTab === "admin" && adminSelectedConversation) ||
+    (user.role === "ADMIN" && adminSelectedConversation);
+
+  const handleBackToConversations = () => {
+    if (activeTab === "users") {
+      setUserHostSelectedConversation(null);
+    } else {
+      setAdminSelectedConversation(null);
+    }
+  };
+
   return (
-    <div className="w-full">
-      <div className="bg-white rounded-lg shadow h-[calc(100vh-120px)]">
-        <div className="flex h-full">
+    <div className="w-full max-w-full h-full overflow-hidden pt-safe">
+      <div
+        className="bg-white overflow-hidden max-w-full"
+        style={{
+          height:
+            isMobile && user ? `calc(100vh - ${BOTTOM_NAV_HEIGHT}px)` : "100%",
+        }}
+      >
+        <div className="flex h-full relative overflow-hidden max-w-full">
           {/* Sidebar */}
-          <div className="w-80 border-r bg-gray-50 flex flex-col">
-            <div className="p-4 border-b">
-              <h1 className="text-xl font-semibold text-gray-900 flex items-center">
-                <MessageCircle className="h-5 w-5 mr-2" />
-                Messages
+          <div
+            className={`
+            ${
+              isMobile
+                ? `absolute inset-0 z-40 bg-gray-50 transition-transform duration-300 ease-in-out ${
+                    hasSelectedConversation
+                      ? "-translate-x-full"
+                      : "translate-x-0"
+                  }`
+                : "w-80 relative flex-shrink-0"
+            } 
+            border-r bg-gray-50 flex flex-col overflow-hidden max-w-full
+          `}
+          >
+            <div className="p-4 pt-6 border-b overflow-hidden flex-shrink-0">
+              <h1 className="text-xl font-semibold text-gray-900 flex items-center flex-wrap">
+                <MessageCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+                <span className="flex-shrink-0">Messages</span>
                 {(adminConnected || userHostConnected) && (
                   <div className="ml-2 flex items-center">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
@@ -236,8 +282,11 @@ export default function MessagesPage() {
                   </TabsList>
                 </div>
 
-                <TabsContent value="users" className="flex-1 mt-0 p-0">
-                  <div className="flex-1 overflow-y-auto">
+                <TabsContent
+                  value="users"
+                  className="flex-1 mt-0 p-0 overflow-hidden"
+                >
+                  <div className="h-full overflow-y-auto">
                     {userHostLoading && userHostConversations.length === 0 ? (
                       <ConversationSkeleton />
                     ) : userHostConversations.length === 0 ? (
@@ -250,7 +299,7 @@ export default function MessagesPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="p-2">
+                      <div className="px-4 pt-2 pb-6 space-y-2">
                         {userHostConversations.map((conversation) => {
                           const lastMessage = getLastMessage(conversation);
                           const title =
@@ -322,8 +371,11 @@ export default function MessagesPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="admin" className="flex-1 mt-0 p-0">
-                  <div className="flex-1 overflow-y-auto">
+                <TabsContent
+                  value="admin"
+                  className="flex-1 mt-0 p-0 overflow-hidden"
+                >
+                  <div className="h-full overflow-y-auto">
                     {adminLoading && adminConversations.length === 0 ? (
                       <ConversationSkeleton />
                     ) : adminConversations.length === 0 ? (
@@ -345,7 +397,7 @@ export default function MessagesPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="p-2">
+                      <div className="px-4 pt-2 pb-6 space-y-2">
                         {adminConversations.map((conversation) => {
                           const lastMessage = getLastMessage(conversation);
                           const title = getConversationTitle(conversation);
@@ -416,7 +468,7 @@ export default function MessagesPage() {
               </Tabs>
             ) : (
               // Admin view - only admin conversations
-              <div className="flex-1 overflow-y-auto">
+              <div className="h-full overflow-y-auto">
                 {adminLoading && adminConversations.length === 0 ? (
                   <ConversationSkeleton />
                 ) : adminConversations.length === 0 ? (
@@ -429,7 +481,7 @@ export default function MessagesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-2">
+                  <div className="px-4 pt-2 pb-6 space-y-2">
                     {adminConversations.map((conversation) => {
                       const lastMessage = getLastMessage(conversation);
                       const title = getConversationTitle(conversation);
@@ -500,15 +552,33 @@ export default function MessagesPage() {
           </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col">
-            {(activeTab === "users" && userHostSelectedConversation) ||
-            (activeTab === "admin" && adminSelectedConversation) ||
-            (user.role === "ADMIN" && adminSelectedConversation) ? (
+          <div
+            className={`flex-1 flex flex-col overflow-hidden ${
+              isMobile
+                ? `absolute inset-0 z-40 bg-white transition-transform duration-300 ease-in-out ${
+                    hasSelectedConversation
+                      ? "translate-x-0"
+                      : "translate-x-full"
+                  }`
+                : ""
+            }`}
+          >
+            {hasSelectedConversation ? (
               <>
                 {/* Chat Header */}
-                <div className="p-4 border-b bg-white">
-                  <div className="flex items-center space-x-3">
-                    <Avatar>
+                <div className="p-4 border-b bg-white flex-shrink-0 overflow-hidden">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    {isMobile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleBackToConversations}
+                        className="text-gray-600 hover:text-gray-900 p-2 -ml-2 flex-shrink-0"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </Button>
+                    )}
+                    <Avatar className="flex-shrink-0">
                       <AvatarImage
                         src={
                           activeTab === "users" && userHostSelectedConversation
@@ -516,8 +586,8 @@ export default function MessagesPage() {
                                 userHostSelectedConversation
                               )
                             : adminSelectedConversation
-                            ? getConversationAvatar(adminSelectedConversation)
-                            : undefined
+                              ? getConversationAvatar(adminSelectedConversation)
+                              : undefined
                         }
                       />
                       <AvatarFallback>
@@ -528,35 +598,35 @@ export default function MessagesPage() {
                               )
                             )
                           : adminSelectedConversation
-                          ? getInitials(
-                              getConversationTitle(adminSelectedConversation)
-                            )
-                          : "U"}
+                            ? getInitials(
+                                getConversationTitle(adminSelectedConversation)
+                              )
+                            : "U"}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-gray-900 truncate">
                         {activeTab === "users" && userHostSelectedConversation
                           ? getUserHostConversationTitle(
                               userHostSelectedConversation
                             )
                           : adminSelectedConversation
-                          ? getConversationTitle(adminSelectedConversation)
-                          : "Unknown"}
+                            ? getConversationTitle(adminSelectedConversation)
+                            : "Unknown"}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-500 truncate">
                         {activeTab === "users"
                           ? "Customer"
                           : user?.role === "HOST"
-                          ? "Admin"
-                          : "Host"}
+                            ? "Admin"
+                            : "Host"}
                       </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
                   {((activeTab === "users" && userHostLoading) ||
                     (activeTab === "admin" && adminLoading)) &&
                   ((activeTab === "users" && userHostMessages.length === 0) ||
@@ -595,9 +665,9 @@ export default function MessagesPage() {
                             isOwn ? "justify-end" : "justify-start"
                           }`}
                         >
-                          <div className="flex items-start space-x-2 max-w-xs lg:max-w-md">
+                          <div className="flex items-start space-x-2 max-w-[70%]">
                             {!isOwn && (
-                              <Avatar className="w-6 h-6">
+                              <Avatar className="w-6 h-6 flex-shrink-0">
                                 <AvatarImage
                                   src={message.sender?.avatar || undefined}
                                 />
@@ -607,13 +677,15 @@ export default function MessagesPage() {
                               </Avatar>
                             )}
                             <div
-                              className={`px-4 py-2 rounded-lg ${
+                              className={`px-4 py-2 rounded-lg break-words ${
                                 isOwn
                                   ? "bg-blue-500 text-white"
                                   : "bg-gray-100 text-gray-900"
                               }`}
                             >
-                              <p className="text-sm">{message.content}</p>
+                              <p className="text-sm break-words">
+                                {message.content}
+                              </p>
                               <span className="text-xs opacity-70">
                                 {new Date(message.createdAt).toLocaleTimeString(
                                   [],
@@ -625,7 +697,7 @@ export default function MessagesPage() {
                               </span>
                             </div>
                             {isOwn && (
-                              <Avatar className="w-6 h-6">
+                              <Avatar className="w-6 h-6 flex-shrink-0">
                                 <AvatarImage src={user?.avatar || undefined} />
                                 <AvatarFallback className="text-xs">
                                   {getInitials(user?.name || "U")}
@@ -647,7 +719,7 @@ export default function MessagesPage() {
                 </div>
 
                 {/* Message Input */}
-                <div className="p-4 border-t bg-white">
+                <div className="p-4 border-t bg-white flex-shrink-0">
                   <form
                     onSubmit={
                       activeTab === "users"
@@ -671,7 +743,7 @@ export default function MessagesPage() {
                       disabled={
                         activeTab === "users" ? sendingUserHost : sendingAdmin
                       }
-                      className="flex-1"
+                      className="flex-1 text-base"
                     />
                     <Button
                       type="submit"
@@ -692,7 +764,7 @@ export default function MessagesPage() {
                   </form>
                 </div>
               </>
-            ) : (
+            ) : !isMobile ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-gray-500">
                   <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
@@ -704,7 +776,7 @@ export default function MessagesPage() {
                   </p>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 

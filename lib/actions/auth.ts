@@ -497,3 +497,121 @@ export async function validateReferrerCode(code: string) {
     return { valid: false, error: "Failed to validate referrer code" };
   }
 }
+
+// Generate a 6-digit verification code
+function generateResetCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+export async function requestPasswordReset(email: string) {
+  try {
+    const user = await db.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return { success: true };
+    }
+
+    // Generate a 6-digit code
+    const resetCode = generateResetCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Delete any existing reset tokens for this user
+    await db.verificationToken.deleteMany({
+      where: { identifier: email },
+    });
+
+    // Create new verification token
+    await db.verificationToken.create({
+      data: {
+        identifier: email,
+        token: resetCode,
+        expires: expiresAt,
+      },
+    });
+
+    // Send email with reset code
+    const { sendPasswordResetEmail } = await import("@/lib/email");
+    await sendPasswordResetEmail(user.name, user.email, resetCode);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error requesting password reset:", error);
+    return { error: "Failed to send reset code. Please try again." };
+  }
+}
+
+export async function verifyResetCode(email: string, code: string) {
+  try {
+    const verificationToken = await db.verificationToken.findUnique({
+      where: {
+        identifier_token: {
+          identifier: email,
+          token: code,
+        },
+      },
+    });
+
+    if (!verificationToken) {
+      return { error: "Invalid verification code" };
+    }
+
+    if (verificationToken.expires < new Date()) {
+      // Delete expired token
+      await db.verificationToken.delete({
+        where: {
+          identifier_token: {
+            identifier: email,
+            token: code,
+          },
+        },
+      });
+      return { error: "Verification code has expired" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error verifying reset code:", error);
+    return { error: "Failed to verify code. Please try again." };
+  }
+}
+
+export async function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string
+) {
+  try {
+    // Verify the code first
+    const verificationResult = await verifyResetCode(email, code);
+    if (verificationResult.error) {
+      return verificationResult;
+    }
+
+    // Hash the new password
+    const hashedPassword = await hash(newPassword, 10);
+
+    // Update user's password
+    await db.user.update({
+      where: { email },
+      data: { password: hashedPassword },
+    });
+
+    // Delete the used verification token
+    await db.verificationToken.delete({
+      where: {
+        identifier_token: {
+          identifier: email,
+          token: code,
+        },
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return { error: "Failed to reset password. Please try again." };
+  }
+}

@@ -17,6 +17,7 @@ import { PhoneNumberPopup } from "@/components/ui/phone-number-popup";
 import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
 import { signup, googleSignUp } from "@/lib/actions/auth";
 import { UserRole } from "@prisma/client";
+import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
 
 function SignupContent() {
   const router = useRouter();
@@ -25,6 +26,7 @@ function SignupContent() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPhonePopup, setShowPhonePopup] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const { refreshUser } = useLoggedInUser();
 
   const {
     register,
@@ -49,12 +51,14 @@ function SignupContent() {
       if (result.error) {
         setServerError(result.error);
       } else {
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
+
         if (result.user?.role === "USER") {
           router.push("/");
         } else {
           router.push("/dashboard");
         }
-        router.refresh();
       }
     } catch (error) {
       setServerError("Something went wrong. Please try again.");
@@ -76,13 +80,15 @@ function SignupContent() {
           setCurrentUserId(result.user.id);
           setShowPhonePopup(true);
         } else {
+          // Refresh auth state immediately so header and nav update without page refresh
+          await refreshUser();
+
           // Redirect based on user role
           if (result.user?.role === "USER") {
             router.push("/");
           } else {
             router.push("/dashboard");
           }
-          router.refresh();
         }
       }
     } catch (error) {
@@ -98,11 +104,12 @@ function SignupContent() {
     setIsGoogleLoading(false);
   };
 
-  const handlePhoneSuccess = () => {
+  const handlePhoneSuccess = async () => {
     setShowPhonePopup(false);
+    // Refresh auth state immediately so header and nav update without page refresh
+    await refreshUser();
     // Redirect to home page after phone number is saved
     router.push("/");
-    router.refresh();
   };
 
   const handlePhoneClose = () => {

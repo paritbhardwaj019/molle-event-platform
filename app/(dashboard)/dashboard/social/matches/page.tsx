@@ -23,6 +23,8 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
+import { getMyDatingKyc } from "@/lib/actions/dating";
+import { KycVerificationDialog } from "@/components/social/kyc-verification-dialog";
 
 interface Match {
   id: string;
@@ -57,6 +59,11 @@ export default function MyMatchesPage() {
   const [filterType, setFilterType] = useState<"all" | "recent" | "unread">(
     "all"
   );
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [showKycDialog, setShowKycDialog] = useState(false);
+  const [pendingChatAction, setPendingChatAction] = useState<
+    (() => void) | null
+  >(null);
 
   // Fetch matches
   const fetchMatches = async () => {
@@ -78,9 +85,23 @@ export default function MyMatchesPage() {
     }
   };
 
+  // Fetch KYC status
+  const fetchKycStatus = async () => {
+    try {
+      const result = await getMyDatingKyc();
+      if (result.success) {
+        setKycStatus(result.data?.status || "NOT_STARTED");
+      }
+    } catch (error) {
+      console.error("Failed to fetch KYC status:", error);
+      setKycStatus("NOT_STARTED");
+    }
+  };
+
   useEffect(() => {
     if (user) {
       fetchMatches();
+      fetchKycStatus();
     }
   }, [user]);
 
@@ -126,6 +147,29 @@ export default function MyMatchesPage() {
       return format(date, "EEE");
     } else {
       return format(date, "MMM d");
+    }
+  };
+
+  // Handle chat navigation with KYC check
+  const handleChatNavigation = (conversationId: string) => {
+    // Check KYC status for starting conversations
+    if (kycStatus && kycStatus !== "APPROVED") {
+      setPendingChatAction(() => () => {
+        window.location.href = `/dashboard/social/chat?conversation=${conversationId}`;
+      });
+      setShowKycDialog(true);
+      return;
+    }
+
+    // Navigate directly if KYC is approved or not required
+    window.location.href = `/dashboard/social/chat?conversation=${conversationId}`;
+  };
+
+  // Handle KYC dialog continue
+  const handleKycDialogContinue = () => {
+    if (pendingChatAction) {
+      pendingChatAction();
+      setPendingChatAction(null);
     }
   };
 
@@ -350,14 +394,13 @@ export default function MyMatchesPage() {
                   )}
 
                   {/* Action Button */}
-                  <Link
-                    href={`/dashboard/social/chat?conversation=${match.conversationId}`}
+                  <Button
+                    onClick={() => handleChatNavigation(match.conversationId)}
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                   >
-                    <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      {match.lastMessage ? "Continue Chat" : "Start Chatting"}
-                    </Button>
-                  </Link>
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    {match.lastMessage ? "Continue Chat" : "Start Chatting"}
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -406,6 +449,18 @@ export default function MyMatchesPage() {
             </Card>
           </div>
         )}
+
+        {/* KYC Verification Dialog */}
+        <KycVerificationDialog
+          isOpen={showKycDialog}
+          onClose={() => {
+            setShowKycDialog(false);
+            setPendingChatAction(null);
+          }}
+          kycStatus={kycStatus}
+          context="chat"
+          onContinue={handleKycDialogContinue}
+        />
       </div>
     </div>
   );

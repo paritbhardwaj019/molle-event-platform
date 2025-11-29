@@ -87,7 +87,7 @@ async function getRecommendedEvents() {
       const minPackagePrice = Math.min(
         ...event.packages.map((pkg) => toNumber(pkg.price))
       );
-      minPrice = `From ₹${minPackagePrice.toFixed(2)}`;
+      minPrice = `From ₹${minPackagePrice}`;
     }
 
     // Calculate review stats

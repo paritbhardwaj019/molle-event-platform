@@ -25,7 +25,7 @@ async function getEvents(searchParams: { city?: string }) {
       const minPackagePrice = Math.min(
         ...event.packages.map((pkg) => toNumber(pkg.price))
       );
-      minPrice = `From ₹${minPackagePrice.toFixed(2)}`;
+      minPrice = `From ₹${minPackagePrice}`;
     }
 
     const reviews = (event as any).reviews || [];

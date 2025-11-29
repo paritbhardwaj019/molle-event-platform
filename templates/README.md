@@ -58,9 +58,28 @@ This template is sent to event hosts when they receive a new booking.
 - `buyerPhone`: Phone number of the ticket buyer
 - `eventImage`: Optional event cover image
 
+### 3. Password Reset Code (`password-reset-code.tsx`)
+
+This template is sent to users when they request to reset their password.
+
+**Features:**
+
+- Clear and prominent 6-digit verification code
+- Expiration time notification (15 minutes)
+- Security-focused messaging
+- Professional design with code highlighting
+- Instructions for users who didn't request the reset
+
+**Props:**
+
+- `userName`: Name of the user
+- `resetCode`: 6-digit verification code (e.g., "123456")
+
 ## Usage
 
 ### Sending Emails
+
+#### Ticket Confirmation Emails
 
 Use the `sendTicketConfirmationEmails` function from `@/lib/email`:
 
@@ -94,6 +113,20 @@ const emailData = {
 };
 
 const result = await sendTicketConfirmationEmails(emailData);
+```
+
+#### Password Reset Email
+
+Use the `sendPasswordResetEmail` function from `@/lib/email`:
+
+```typescript
+import { sendPasswordResetEmail } from "@/lib/email";
+
+const result = await sendPasswordResetEmail(
+  "John Doe", // userName
+  "john@example.com", // userEmail
+  "123456" // resetCode (6-digit code)
+);
 ```
 
 ### Environment Variables

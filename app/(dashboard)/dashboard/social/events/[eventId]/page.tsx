@@ -35,6 +35,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { use } from "react";
 import { hasUserPurchasedEventTickets } from "@/lib/actions/event";
+import { getMyDatingKyc } from "@/lib/actions/dating";
+import { KycVerificationDialog } from "@/components/social/kyc-verification-dialog";
 
 interface EventAttendee {
   id: string;
@@ -108,6 +110,11 @@ export default function EventSocialPage({
   >([]);
   const [showRequests, setShowRequests] = useState(false);
   const [eventLoading, setEventLoading] = useState(true);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [showKycDialog, setShowKycDialog] = useState(false);
+  const [pendingConnectionAction, setPendingConnectionAction] = useState<
+    (() => void) | null
+  >(null);
 
   // Fetch event details
   const fetchEvent = useCallback(async () => {
@@ -184,6 +191,19 @@ export default function EventSocialPage({
     }
   }, [resolvedParams.eventId]);
 
+  // Fetch KYC status
+  const fetchKycStatus = useCallback(async () => {
+    try {
+      const result = await getMyDatingKyc();
+      if (result.success) {
+        setKycStatus(result.data?.status || "NOT_STARTED");
+      }
+    } catch (error) {
+      console.error("Failed to fetch KYC status:", error);
+      setKycStatus("NOT_STARTED");
+    }
+  }, []);
+
   // Join/Leave event
   const handleAttendanceChange = async (status: string) => {
     try {
@@ -214,6 +234,20 @@ export default function EventSocialPage({
   const sendConnectionRequest = async () => {
     if (!selectedUser) return;
 
+    // Check KYC status for connection requests
+    if (kycStatus && kycStatus !== "APPROVED") {
+      setPendingConnectionAction(() => () => performConnectionRequest());
+      setShowKycDialog(true);
+      return;
+    }
+
+    await performConnectionRequest();
+  };
+
+  // Perform the actual connection request
+  const performConnectionRequest = async () => {
+    if (!selectedUser) return;
+
     setSendingRequest(true);
     try {
       const response = await fetch("/api/social/connection-requests", {
@@ -242,6 +276,14 @@ export default function EventSocialPage({
       toast.error("Failed to send connection request");
     } finally {
       setSendingRequest(false);
+    }
+  };
+
+  // Handle KYC dialog continue
+  const handleKycDialogContinue = () => {
+    if (pendingConnectionAction) {
+      pendingConnectionAction();
+      setPendingConnectionAction(null);
     }
   };
 
@@ -334,6 +376,7 @@ export default function EventSocialPage({
         fetchMyAttendance(),
         fetchAttendees(),
         fetchConnectionRequests(),
+        fetchKycStatus(),
       ]).finally(() => setIsLoading(false));
     }
   }, [
@@ -342,6 +385,7 @@ export default function EventSocialPage({
     fetchMyAttendance,
     fetchAttendees,
     fetchConnectionRequests,
+    fetchKycStatus,
   ]);
 
   if (!user) {
@@ -752,6 +796,18 @@ export default function EventSocialPage({
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* KYC Verification Dialog */}
+        <KycVerificationDialog
+          isOpen={showKycDialog}
+          onClose={() => {
+            setShowKycDialog(false);
+            setPendingConnectionAction(null);
+          }}
+          kycStatus={kycStatus}
+          context="event"
+          onContinue={handleKycDialogContinue}
+        />
       </div>
     </div>
   );

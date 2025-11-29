@@ -244,7 +244,9 @@ export function CreateEventDialog({
           errors.push(`Ticket ${index + 1}: Name is required`);
         }
         if (pkg.price === undefined || pkg.price < 0) {
-          errors.push(`Ticket ${index + 1}: Valid price is required`);
+          errors.push(
+            `Ticket ${index + 1}: Valid price is required (use 0 for free tickets)`
+          );
         }
         if (!pkg.allocation || pkg.allocation < 1) {
           errors.push(`Ticket ${index + 1}: Allocation must be at least 1`);

@@ -40,21 +40,21 @@ const baseRoutes = {
   HOST: [
     { name: "Events", href: "/dashboard/events", icon: Calendar },
     { name: "Bookings", href: "/dashboard/bookings", icon: BookOpen },
-    { name: "Home", href: "/dashboard", icon: Home, isCenter: true },
+    { name: "Home", href: "/", icon: Home, isCenter: true },
     { name: "Messages", href: "/dashboard/messages", icon: Mail },
     { name: "Profile", href: "/profile", icon: UserCircle },
   ],
   USER: [
     { name: "Discover", href: "/dashboard/social/discover", icon: Search },
     { name: "Events", href: "/events", icon: Calendar },
-    { name: "Home", href: "/dashboard", icon: Home, isCenter: true },
+    { name: "Home", href: "/", icon: Home, isCenter: true },
     { name: "Chat", href: "/chat", icon: MessageCircleIcon },
     { name: "Profile", href: "/profile", icon: UserCircle },
   ],
   ADMIN: [
     { name: "Events", href: "/dashboard/admin/events", icon: Calendar },
     { name: "Users", href: "/dashboard/admin/customers", icon: Users },
-    { name: "Home", href: "/dashboard", icon: Home, isCenter: true },
+    { name: "Home", href: "/", icon: Home, isCenter: true },
     { name: "Analytics", href: "/dashboard/admin/analytics", icon: BarChart },
     { name: "Settings", href: "/dashboard/admin/settings", icon: Settings },
   ],
@@ -164,8 +164,8 @@ export function MobileBottomNavigation() {
         <div className="flex items-center justify-around h-18 px-2 py-1">
           {navigation.map((item) => {
             let isActive = false;
-            if (item.href === "/dashboard") {
-              isActive = pathname === "/dashboard";
+            if (item.href === "/") {
+              isActive = pathname === "/";
             } else if (item.name === "Chat") {
               isActive =
                 pathname === "/chat" ||
@@ -173,7 +173,7 @@ export function MobileBottomNavigation() {
             } else {
               isActive =
                 pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                (item.href !== "/" && pathname.startsWith(item.href));
             }
 
             const badge =

@@ -9,6 +9,7 @@ import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { PWARegistration } from "@/components/pwa-registration";
 import { MobileContentWrapper } from "@/components/mobile-content-wrapper";
 import { PushNotificationProvider } from "@/components/push-notification-provider";
+import { AuthProviderWrapper } from "@/components/providers/auth-provider-wrapper";
 
 const dmSans = DM_Sans({ subsets: ["latin"] });
 const spaceGrotesk = Space_Grotesk({
@@ -138,13 +139,15 @@ export default function RootLayout({
         <meta property="og:image" content="/images/hero-event-1.png" />
       </head>
       <body className={`${spaceGrotesk.variable} ${dmSans.className}`}>
-        <PWARegistration />
-        <PWANavigationWrapper />
-        <MobileContentWrapper>{children}</MobileContentWrapper>
-        <MolleSwipesOnboardingWrapper />
-        <PWAInstallPrompt />
-        <PushNotificationProvider />
-        <Toaster richColors closeButton position="bottom-right" />
+        <AuthProviderWrapper>
+          <PWARegistration />
+          <PWANavigationWrapper />
+          <MobileContentWrapper>{children}</MobileContentWrapper>
+          <MolleSwipesOnboardingWrapper />
+          <PWAInstallPrompt />
+          <PushNotificationProvider />
+          <Toaster richColors closeButton position="bottom-right" />
+        </AuthProviderWrapper>
       </body>
     </html>
   );

@@ -39,7 +39,6 @@ import { useEffect, useState } from "react";
 import { getInviteStatusForUserAndEvent } from "@/lib/actions/invite";
 import { getInviteFormForEvent } from "@/lib/actions/invite-form";
 import { InviteStatus } from "@prisma/client";
-import { toast } from "sonner";
 import { use } from "react";
 import { calculateFees } from "@/lib/actions/settings";
 import { EventReviewsSection } from "@/components/reviews/event-reviews-section";
@@ -451,7 +450,7 @@ export default function EventDetailPage({
                   <Avatar>
                     <AvatarImage src={event.host.avatar || undefined} />
                     <AvatarFallback className="bg-purple-100 text-purple-700">
-                      {event.host.name.slice(0, 2).toUpperCase()}
+                      {event.organizerName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -460,7 +459,7 @@ export default function EventDetailPage({
                         href={`/host/${event.host.id}`}
                         className="hover:text-purple-300 transition-colors cursor-pointer"
                       >
-                        {event.host.name}
+                        {event.organizerName}
                       </a>
                     </p>
                     <p className="text-gray-400 text-sm">Event Host</p>
@@ -557,7 +556,7 @@ export default function EventDetailPage({
                         </div>
                         <div className="text-right">
                           <span className="text-xl font-bold text-yellow-400">
-                            ₹{packagePrice.toFixed(2)}
+                            ₹{packagePrice}
                           </span>
                         </div>
                       </div>
@@ -653,7 +652,7 @@ export default function EventDetailPage({
                               ? pkg
                               : min
                         );
-                        return toNumber(minPackage.price).toFixed(2);
+                        return toNumber(minPackage.price);
                       })()}
                     </span>
                   ) : (

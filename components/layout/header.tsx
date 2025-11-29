@@ -43,10 +43,12 @@ import {
   Menu,
   X,
   Power,
+  UserCheck,
+  Bell,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function Breadcrumb() {
   const pathname = usePathname();
@@ -226,6 +228,21 @@ const baseRoutes = {
       href: "/dashboard/admin/amenities",
       icon: Zap,
     },
+    {
+      name: "Push Notifications",
+      href: "/dashboard/admin/push-notifications",
+      icon: Bell,
+    },
+    // {
+    //   name: "Impersonate User",
+    //   href: "/dashboard/admin/impersonate",
+    //   icon: UserCheck,
+    // },
+    // {
+    //   name: "Manual Ticket Release",
+    //   href: "/dashboard/admin/manual-release",
+    //   icon: Ticket,
+    // },
   ],
 };
 
@@ -237,7 +254,21 @@ export function Header() {
   const { user, logoutUser } = useLoggedInUser();
   const { unreadCount } = useMessaging();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleLogout = () => {
     logoutUser();
@@ -246,6 +277,9 @@ export function Header() {
   };
 
   if (!user) return null;
+
+  // Hide header on messages page for mobile only
+  if (pathname === "/dashboard/messages" && isMobile) return null;
 
   const navigation = getSidebarRoutes(user.role as keyof typeof baseRoutes);
 

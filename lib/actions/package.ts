@@ -628,6 +628,21 @@ export async function verifySubscriptionPayment(
   input: VerifySubscriptionPaymentInput
 ) {
   try {
+    // Validate input parameters
+    if (!input.orderId) {
+      return {
+        success: false,
+        error: "Order ID is required",
+      };
+    }
+
+    if (!input.paymentId) {
+      return {
+        success: false,
+        error: "Payment ID is required",
+      };
+    }
+
     const payment = await db.subscriptionPayment.update({
       where: { cashfreeOrderId: input.orderId },
       data: {

@@ -44,6 +44,11 @@ export async function getUserTickets() {
     const tickets = await db.ticket.findMany({
       where: {
         userId: session.user.id,
+        booking: {
+          status: {
+            in: ["CONFIRMED", "COMPLETED"],
+          },
+        },
       },
       include: {
         event: {

@@ -53,10 +53,9 @@ export function SettingsStep({ form }: SettingsStepProps) {
   const [selectedFormForPreview, setSelectedFormForPreview] =
     useState<any>(null);
 
-  // Fetch platform fee settings and set host fee based on user data
   useEffect(() => {
     const fetchFeeSettings = async () => {
-      if (userLoading) return; // Don't fetch if user is still loading
+      if (userLoading) return;
 
       setIsLoadingFees(true);
       try {
@@ -66,7 +65,6 @@ export function SettingsStep({ form }: SettingsStepProps) {
         setUserFeePercentage(parseFloat(userFee));
         setPlatformHostFeePercentage(parseFloat(platformHostFee));
 
-        // Use user's custom host fee percentage if available, otherwise use platform default
         if (
           user?.hostFeePercentage !== null &&
           user?.hostFeePercentage !== undefined
@@ -83,7 +81,6 @@ export function SettingsStep({ form }: SettingsStepProps) {
     fetchFeeSettings();
   }, [user, userLoading]);
 
-  // Fetch invite forms when event type is invite_only
   useEffect(() => {
     if (eventType === "invite_only") {
       const fetchInviteForms = async () => {
@@ -108,22 +105,35 @@ export function SettingsStep({ form }: SettingsStepProps) {
     }
   }, [eventType]);
 
-  // Function to render price preview for a single package
   const renderPackagePreview = (pkg: any, index: number) => {
-    const baseTicketPrice = Number(pkg.price) || 100;
+    const baseTicketPrice = Number(pkg.price) || 0;
 
-    // Calculate fees
     const userFeeAmount = baseTicketPrice * (userFeePercentage / 100);
     const hostFeeAmount = baseTicketPrice * (currentHostFeePercentage / 100);
 
     const userPays = baseTicketPrice + userFeeAmount;
     const hostGets = baseTicketPrice - hostFeeAmount;
 
-    // Calculate referral fee if enabled
     const referralFeeAmount = allowReferrals
       ? hostGets * (referralPercentage / 100)
       : 0;
     const hostGetsWithReferral = hostGets - referralFeeAmount;
+
+    if (baseTicketPrice === 0) {
+      return (
+        <div className="space-y-4">
+          <div className="text-center py-4">
+            <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium mb-3">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              FREE TICKET
+            </div>
+            <p className="text-sm text-gray-600">
+              No fees or charges apply for this ticket.
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-4">
@@ -247,252 +257,279 @@ export function SettingsStep({ form }: SettingsStepProps) {
         )}
       />
 
-      <div className="space-y-4">
-        <FormField
-          control={form.control}
-          name="settings.allowReferrals"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">Allow Referrals</FormLabel>
-                <FormDescription>
-                  Enable referral program for this event
-                </FormDescription>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        {allowReferrals && (
+      {packages.length > 1 && (
+        <div className="space-y-4">
           <FormField
             control={form.control}
-            name="settings.referralPercentage"
+            name="settings.allowReferrals"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Referral Percentage</FormLabel>
-                <div className="flex items-center">
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.1}
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseFloat(e.target.value))
-                      }
-                    />
-                  </FormControl>
-                  <span className="ml-2">%</span>
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Allow Referrals</FormLabel>
+                  <FormDescription>
+                    Enable referral program for this event
+                  </FormDescription>
                 </div>
-                <FormDescription>
-                  Percentage of host earnings that referrers will receive
-                </FormDescription>
-                <FormMessage />
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
-        )}
 
-        {eventType === "invite_only" && (
-          <>
+          {allowReferrals && (
             <FormField
               control={form.control}
-              name="settings.inviteFormId"
+              name="settings.referralPercentage"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Invite Form</FormLabel>
-                  <div className="flex gap-2">
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select an invite form" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isLoadingForms ? (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            Loading forms...
-                          </div>
-                        ) : inviteForms.length > 0 ? (
-                          inviteForms.map((form) => (
-                            <SelectItem key={form.id} value={form.id}>
-                              {form.name}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            No invite forms available
-                          </div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    {field.value && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          const selectedForm = inviteForms.find(
-                            (f) => f.id === field.value
-                          );
-                          if (selectedForm) {
-                            setSelectedFormForPreview(selectedForm);
-                            setShowPreviewDialog(true);
-                          }
-                        }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <FormLabel>Referral Percentage</FormLabel>
+                  <div className="flex items-center">
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value))
+                        }
+                      />
+                    </FormControl>
+                    <span className="ml-2">%</span>
                   </div>
                   <FormDescription>
-                    Choose a custom form for users to fill when requesting
-                    invites.
-                    {inviteForms.length === 0 && !isLoadingForms && (
-                      <span className="text-amber-600">
-                        {" "}
-                        Create an invite form first in your dashboard.
-                      </span>
-                    )}
+                    Percentage of host earnings that referrers will receive
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
-            <FormField
-              control={form.control}
-              name="settings.autoApproveInvites"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">
-                      Auto-approve Invites
-                    </FormLabel>
-                    <FormDescription>
-                      Automatically approve invited guests
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Host Fee Information */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-base">Your Host Fee Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingFees || userLoading ? (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-6 w-16" />
-              </div>
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Current Host Fee:</span>
-                <span className="text-lg font-semibold text-blue-600">
-                  {currentHostFeePercentage}%
-                </span>
-              </div>
-              <div className="text-sm text-gray-600">
-                {user?.hostFeePercentage !== null &&
-                user?.hostFeePercentage !== undefined ? (
-                  <div className="bg-blue-50 p-3 rounded-md">
-                    <p className="font-medium text-blue-800">Custom Fee Rate</p>
-                    <p>
-                      You have a custom host fee rate of{" "}
-                      {currentHostFeePercentage}% set by the admin. This rate
-                      will be used for all your events.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <p className="font-medium text-gray-800">
-                      Platform Default Rate
-                    </p>
-                    <p>
-                      You're using the platform default host fee rate of{" "}
-                      {platformHostFeePercentage}%. Contact admin for custom
-                      rates.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
-      {packages.length > 0 && (
+      {eventType === "invite_only" && (
+        <>
+          <FormField
+            control={form.control}
+            name="settings.inviteFormId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Invite Form</FormLabel>
+                <div className="flex gap-2">
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an invite form" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {isLoadingForms ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          Loading forms...
+                        </div>
+                      ) : inviteForms.length > 0 ? (
+                        inviteForms.map((form) => (
+                          <SelectItem key={form.id} value={form.id}>
+                            {form.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          No invite forms available
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {field.value && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const selectedForm = inviteForms.find(
+                          (f) => f.id === field.value
+                        );
+                        if (selectedForm) {
+                          setSelectedFormForPreview(selectedForm);
+                          setShowPreviewDialog(true);
+                        }
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <FormDescription>
+                  Choose a custom form for users to fill when requesting
+                  invites.
+                  {inviteForms.length === 0 && !isLoadingForms && (
+                    <span className="text-amber-600">
+                      {" "}
+                      Create an invite form first in your dashboard.
+                    </span>
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="settings.autoApproveInvites"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">
+                    Auto-approve Invites
+                  </FormLabel>
+                  <FormDescription>
+                    Automatically approve invited guests
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </>
+      )}
+
+      {packages.length > 1 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="text-base">Price Preview</CardTitle>
+            <CardTitle className="text-base">Your Host Fee Settings</CardTitle>
           </CardHeader>
           <CardContent>
-            {packages.length === 1 ? (
-              <>
-                {renderPackagePreview(packages[0], 0)}
-                <div className="bg-blue-50 p-3 rounded-md text-xs text-blue-700 mt-4">
-                  <p>• This is a preview based on your package price</p>
-                  <p>• Referral fees are deducted from the host's earnings</p>
-                  <p>• Actual amounts may vary based on platform settings</p>
+            {isLoadingFees || userLoading ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-6 w-16" />
                 </div>
-              </>
+                <Skeleton className="h-20 w-full" />
+              </div>
             ) : (
-              <Tabs defaultValue="0" className="w-full">
-                <TabsList className="w-full mb-4">
-                  {packages.map((pkg, index) => (
-                    <TabsTrigger
-                      key={index}
-                      value={index.toString()}
-                      className="flex-1"
-                    >
-                      {pkg.name || `Package ${index + 1}`}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {packages.map((pkg, index) => (
-                  <TabsContent key={index} value={index.toString()}>
-                    {renderPackagePreview(pkg, index)}
-
-                    <div className="bg-blue-50 p-3 rounded-md text-xs text-blue-700 mt-4">
-                      <p>• This is a preview based on this package's price</p>
-                      <p>
-                        • Referral fees are deducted from the host's earnings
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Current Host Fee:</span>
+                  <span className="text-lg font-semibold text-blue-600">
+                    {currentHostFeePercentage}%
+                  </span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {user?.hostFeePercentage !== null &&
+                  user?.hostFeePercentage !== undefined ? (
+                    <div className="bg-blue-50 p-3 rounded-md">
+                      <p className="font-medium text-blue-800">
+                        Custom Fee Rate
                       </p>
                       <p>
-                        • Actual amounts may vary based on platform settings
+                        You have a custom host fee rate of{" "}
+                        {currentHostFeePercentage}% set by the admin. This rate
+                        will be used for all your events.
                       </p>
                     </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+                  ) : (
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <p className="font-medium text-gray-800">
+                        Platform Default Rate
+                      </p>
+                      <p>
+                        You're using the platform default host fee rate of{" "}
+                        {platformHostFeePercentage}%. Contact admin for custom
+                        rates.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      {packages.length > 0 &&
+        packages.some((pkg) => (Number(pkg.price) || 0) > 0) && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Price Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {packages.length === 1 ? (
+                <>
+                  {renderPackagePreview(packages[0], 0)}
+                  <div className="bg-blue-50 p-3 rounded-md text-xs text-blue-700 mt-4">
+                    <p>• This is a preview based on your package price</p>
+                    <p>• Referral fees are deducted from the host's earnings</p>
+                    <p>• Actual amounts may vary based on platform settings</p>
+                  </div>
+                </>
+              ) : (
+                <Tabs defaultValue="0" className="w-full">
+                  <TabsList className="w-full mb-4">
+                    {packages.map((pkg, index) => (
+                      <TabsTrigger
+                        key={index}
+                        value={index.toString()}
+                        className="flex-1"
+                      >
+                        {pkg.name || `Package ${index + 1}`}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  {packages.map((pkg, index) => (
+                    <TabsContent key={index} value={index.toString()}>
+                      {renderPackagePreview(pkg, index)}
+
+                      <div className="bg-blue-50 p-3 rounded-md text-xs text-blue-700 mt-4">
+                        <p>• This is a preview based on this package's price</p>
+                        <p>
+                          • Referral fees are deducted from the host's earnings
+                        </p>
+                        <p>
+                          • Actual amounts may vary based on platform settings
+                        </p>
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+      {packages.length > 0 &&
+        packages.every((pkg) => (Number(pkg.price) || 0) === 0) && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-base">Free Event</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-6">
+                <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium mb-3">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  All tickets are free
+                </div>
+                <p className="text-sm text-gray-600">
+                  No fees or charges apply since all your tickets are free.
+                  Users can book directly without payment.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {selectedFormForPreview && (
         <PreviewInviteFormDialog

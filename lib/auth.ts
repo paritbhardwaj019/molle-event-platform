@@ -3,6 +3,7 @@ import { verify } from "jsonwebtoken";
 import { db } from "@/lib/db";
 import { UserRole } from "@prisma/client";
 import { validateReferrerCode } from "@/lib/actions/referrer-code";
+import { getImpersonationFromRequest } from "./impersonation";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -27,8 +28,18 @@ export async function auth() {
       return null;
     }
 
+    // Check if impersonation is active
+    const impersonation = await getImpersonationFromRequest();
+
+    let userId = decoded.userId;
+
+    // If impersonation is active, use the target user ID instead
+    if (impersonation) {
+      userId = impersonation.actingUserId;
+    }
+
     const user = await db.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
@@ -50,7 +61,18 @@ export async function auth() {
       return null;
     }
 
-    return { user };
+    // Return user with impersonation context if active
+    return {
+      user,
+      impersonation: impersonation
+        ? {
+            impersonatorId: impersonation.impersonatorId,
+            impersonatorName: impersonation.impersonatorName,
+            impersonatorEmail: impersonation.impersonatorEmail,
+            reason: impersonation.reason,
+          }
+        : null,
+    };
   } catch (error) {
     console.error("Auth error:", error);
     return null;

@@ -263,19 +263,31 @@ export function PackagesStep({ form }: PackagesStepProps) {
                     name={`packages.${index}.price`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price</FormLabel>
+                        <FormLabel className="flex items-center gap-2">
+                          Price
+                          {field.value === 0 && (
+                            <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">
+                              FREE
+                            </span>
+                          )}
+                        </FormLabel>
                         <FormControl>
                           <Input
                             type="number"
                             min={0}
                             step={0.01}
-                            placeholder="99.99"
+                            placeholder="0 for free, or enter price"
                             {...field}
                             onChange={(e) =>
                               field.onChange(Number(e.target.value))
                             }
                           />
                         </FormControl>
+                        <FormDescription>
+                          {field.value === 0
+                            ? "This is a free ticket - no payment required"
+                            : "Enter the price per ticket"}
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

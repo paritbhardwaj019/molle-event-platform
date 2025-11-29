@@ -56,12 +56,17 @@ function ChatContent() {
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Function to fix messages array reference issue
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
+
   const hostId = searchParams.get("hostId");
   const eventTitle = searchParams.get("eventTitle");
+
+  // Mobile bottom navigation height
+  const BOTTOM_NAV_HEIGHT = 72;
 
   // Check if we're on mobile
   useEffect(() => {
@@ -92,6 +97,7 @@ function ChatContent() {
   }, [selectedConversation, fetchMessages]);
 
   useEffect(() => {
+    setLocalMessages(messages);
     scrollToBottom();
   }, [messages]);
 
@@ -202,9 +208,12 @@ function ChatContent() {
 
   const handleSelectConversation = (conversation: ChatConversation) => {
     setSelectedConversation(conversation);
-    if (isMobile) {
-      setIsMobileSidebarOpen(false);
-    }
+    // On mobile, selecting a conversation automatically shows the chat view
+  };
+
+  const handleBackToConversations = () => {
+    setSelectedConversation(null);
+    // This will show the conversations list on mobile
   };
 
   const handleConversationDelete = async (
@@ -242,7 +251,7 @@ function ChatContent() {
 
         // Reset conversation state - clear selected conversation and messages
         setSelectedConversation(null);
-        setMessages([]);
+        setLocalMessages([]);
 
         // Refresh conversations list to reflect the deletion
         await fetchConversations();
@@ -299,30 +308,28 @@ function ChatContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] flex relative">
-      {/* Mobile Sidebar Overlay */}
-      {isMobile && isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
-
+    <div
+      className="bg-[#121212] flex relative overflow-hidden"
+      style={{
+        height:
+          isMobile && user ? `calc(100vh - ${BOTTOM_NAV_HEIGHT}px)` : "100vh",
+      }}
+    >
       {/* Sidebar - Conversations List */}
       <div
         className={`
         ${
           isMobile
-            ? `fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out ${
-                isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            ? `absolute inset-0 z-40 bg-gray-900 transition-transform duration-300 ease-in-out ${
+                selectedConversation ? "-translate-x-full" : "translate-x-0"
               }`
-            : "w-80 relative"
+            : "w-80 relative flex-shrink-0"
         } 
         bg-gray-900 border-r border-gray-700 flex flex-col
       `}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-700">
+        <div className="p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white flex items-center">
               <MessageCircle className="w-5 h-5 mr-2" />
@@ -334,26 +341,14 @@ function ChatContent() {
                 </div>
               )}
             </h2>
-            <div className="flex items-center space-x-2">
-              {isMobile && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="text-gray-400 hover:text-white"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="text-gray-400 hover:text-white"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
           </div>
           {eventTitle && (
             <p className="text-sm text-gray-400 mt-1">From: {eventTitle}</p>
@@ -381,7 +376,7 @@ function ChatContent() {
               </div>
             </div>
           ) : (
-            <div className="p-2">
+            <div className="p-2 pb-6">
               {conversations.map((conversation) => {
                 const lastMessage = getLastMessage(conversation);
                 const title = getConversationTitle(conversation);
@@ -454,20 +449,30 @@ function ChatContent() {
       </div>
 
       {/* Chat Area */}
-      <div className={`flex-1 flex flex-col ${isMobile ? "w-full" : ""}`}>
+      <div
+        className={`flex-1 flex flex-col ${
+          isMobile
+            ? `absolute inset-0 z-40 bg-[#121212] transition-transform duration-300 ease-in-out ${
+                selectedConversation || hostId
+                  ? "translate-x-0"
+                  : "translate-x-full"
+              }`
+            : ""
+        }`}
+      >
         {selectedConversation || hostId ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-700 bg-gray-900">
+            <div className="p-4 border-b border-gray-700 bg-gray-900 flex-shrink-0">
               <div className="flex items-center space-x-3">
                 {isMobile && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setIsMobileSidebarOpen(true)}
-                    className="text-gray-400 hover:text-white mr-2"
+                    onClick={handleBackToConversations}
+                    className="text-gray-400 hover:text-white p-2"
                   >
-                    <Menu className="w-4 h-4" />
+                    <ArrowLeft className="w-5 h-5" />
                   </Button>
                 )}
                 <Avatar>
@@ -503,7 +508,7 @@ function ChatContent() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {loading && messages.length === 0 ? (
+              {loading && localMessages.length === 0 ? (
                 <div className="space-y-4">
                   {[...Array(3)].map((_, i) => (
                     <div
@@ -516,7 +521,7 @@ function ChatContent() {
                     </div>
                   ))}
                 </div>
-              ) : messages.length === 0 ? (
+              ) : localMessages.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <MessageCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm">
@@ -524,7 +529,7 @@ function ChatContent() {
                   </p>
                 </div>
               ) : (
-                messages.map((message) => {
+                localMessages.map((message) => {
                   const isOwn = message.senderId === user?.id;
                   return (
                     <div
@@ -594,7 +599,7 @@ function ChatContent() {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-gray-700 bg-gray-900">
+            <div className="p-4 border-t border-gray-700 bg-gray-900 flex-shrink-0">
               {/* Attachments Preview */}
               {attachments.length > 0 && (
                 <div className="mb-3 space-y-2">
@@ -631,7 +636,7 @@ function ChatContent() {
                       : "Type a message to start the conversation..."
                   }
                   disabled={sending}
-                  className="flex-1 bg-gray-800 border-gray-600 text-white placeholder-gray-400 min-h-[40px]"
+                  className="flex-1 bg-gray-800 border-gray-600 text-white placeholder-gray-400 min-h-[40px] text-base"
                 />
                 <Button
                   type="submit"
@@ -649,38 +654,21 @@ function ChatContent() {
               </form>
             </div>
           </>
-        ) : (
+        ) : !isMobile ? (
           <div className="flex-1 flex flex-col">
-            {isMobile && (
-              <div className="p-4 border-b border-gray-700 bg-gray-900">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <Menu className="w-4 h-4 mr-2" />
-                  Show Conversations
-                </Button>
-              </div>
-            )}
             <div className="flex-1 flex items-center justify-center p-4">
               <div className="text-center text-gray-500 max-w-md mx-auto">
                 <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-white mb-2">
-                  {hostId ? "Start a New Conversation" : "Welcome to Messages"}
+                  Welcome to Messages
                 </h3>
                 <p className="text-sm">
-                  {hostId
-                    ? "Type a message below to start chatting with this host"
-                    : isMobile
-                      ? "Tap 'Show Conversations' above to view and start conversations"
-                      : "Select a conversation from the sidebar to start chatting"}
+                  Select a conversation from the sidebar to start chatting
                 </p>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {error && (

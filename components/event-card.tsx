@@ -6,7 +6,6 @@ import { Calendar, Clock, MapPin, Users, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
-import { EventStatusWithLogic } from "@/components/events/event-status-badge";
 import { format } from "date-fns";
 
 interface EventCardProps {
@@ -63,26 +62,6 @@ export function EventCard({ event }: EventCardProps) {
               Invite Only
             </Badge>
           )}
-          {event.status &&
-            event.maxTickets &&
-            event.soldTickets &&
-            event.startDate &&
-            event.endDate && (
-              <div className="absolute top-3 left-3">
-                <EventStatusWithLogic
-                  event={{
-                    id: event.id,
-                    status: event.status as any,
-                    startDate: new Date(event.startDate),
-                    endDate: new Date(event.endDate),
-                    maxTickets: event.maxTickets,
-                    soldTickets: event.soldTickets,
-                  }}
-                  showIcon={true}
-                  useCalculatedStatus={true}
-                />
-              </div>
-            )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-80" />
         </div>
 

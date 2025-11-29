@@ -17,13 +17,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { login, googleSignIn } from "@/lib/actions/auth";
+import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
+import ForgotPasswordForm from "@/components/auth/forgot-password-form";
 
 function LoginContent() {
   const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refreshUser } = useLoggedInUser();
 
   const {
     register,
@@ -50,6 +54,10 @@ function LoginContent() {
 
       if (result.success) {
         toast.success("Successfully logged in!");
+
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
+
         const redirectUrl =
           searchParams.get("redirectTo") || searchParams.get("redirect");
         if (redirectUrl) {
@@ -62,7 +70,6 @@ function LoginContent() {
             router.push("/dashboard");
           }
         }
-        router.refresh();
       }
     } catch (error) {
       toast.error("Failed to login. Please try again.");
@@ -80,6 +87,10 @@ function LoginContent() {
         toast.error(result.error);
       } else {
         toast.success("Successfully signed in with Google!");
+
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
+
         const redirectUrl =
           searchParams.get("redirectTo") || searchParams.get("redirect");
         if (redirectUrl) {
@@ -92,7 +103,6 @@ function LoginContent() {
             router.push("/dashboard");
           }
         }
-        router.refresh();
       }
     } catch (error) {
       toast.error("Failed to sign in with Google. Please try again.");
@@ -106,6 +116,26 @@ function LoginContent() {
     toast.error("Failed to sign in with Google. Please try again.");
     setIsGoogleLoading(false);
   };
+
+  const handleForgotPasswordSuccess = () => {
+    setShowForgotPassword(false);
+    setShowEmailLogin(true);
+  };
+
+  // Show forgot password form
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center p-8">
+        <ForgotPasswordForm
+          onBack={() => {
+            setShowForgotPassword(false);
+            setShowEmailLogin(true);
+          }}
+          onSuccess={handleForgotPasswordSuccess}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#121212] flex">
@@ -248,12 +278,13 @@ function LoginContent() {
                       Remember me
                     </label>
                   </div>
-                  <Link
-                    href="/forgot-password"
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
                     className="text-sm text-primary hover:underline"
                   >
                     Forgot password?
-                  </Link>
+                  </button>
                 </div>
                 <Button
                   type="submit"

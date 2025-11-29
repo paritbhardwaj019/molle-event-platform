@@ -235,7 +235,14 @@ export async function getAllEvents({
             },
           },
           packages: true,
-          bookings: true,
+          bookings: {
+            where: {
+              status: "CONFIRMED",
+              payment: {
+                status: "COMPLETED",
+              },
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -313,7 +320,14 @@ export async function getAllEvents({
           },
         },
         packages: true,
-        bookings: true,
+        bookings: {
+          where: {
+            status: "CONFIRMED",
+            payment: {
+              status: "COMPLETED",
+            },
+          },
+        },
         reviews: {
           select: {
             rating: true,
@@ -1199,7 +1213,14 @@ export async function searchEvents(query: string) {
           },
           take: 1,
         },
-        bookings: true,
+        bookings: {
+          where: {
+            status: "CONFIRMED",
+            payment: {
+              status: "COMPLETED",
+            },
+          },
+        },
         host: {
           select: {
             id: true,
@@ -1251,6 +1272,11 @@ export async function hasUserPurchasedEventTickets(
       where: {
         userId: userId,
         eventId: eventId,
+        booking: {
+          status: {
+            in: ["CONFIRMED", "COMPLETED"],
+          },
+        },
       },
     });
 

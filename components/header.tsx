@@ -30,6 +30,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CitySearch } from "@/components/ui/city-search";
 import { NotificationDropdown } from "@/components/notifications/notification-dropdown";
 import { format } from "date-fns";
@@ -57,6 +65,7 @@ export function Header() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const { user, isAuthenticated, logoutUser } = useLoggedInUser();
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -146,6 +155,11 @@ export function Header() {
     setShowSearchResults(false);
     setSearchQuery("");
     router.push(`/events/${slug}`);
+  };
+
+  const handleLogoutConfirm = () => {
+    logoutUser();
+    setShowLogoutDialog(false);
   };
 
   useEffect(() => {
@@ -439,18 +453,30 @@ export function Header() {
             )}
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden hover:bg-white/10 rounded-full"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            {isMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
+          <div className="md:hidden flex items-center gap-2">
+            {isAuthenticated && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-white/10 rounded-full"
+                onClick={() => setShowLogoutDialog(true)}
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
             )}
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hover:bg-white/10 rounded-full"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </Button>
+          </div>
         </div>
 
         {isMenuOpen && (
@@ -609,6 +635,33 @@ export function Header() {
           </div>
         )}
       </div>
+
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Sign Out</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to sign out? You will need to log in again
+              to access your account.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowLogoutDialog(false)}
+              className="border-purple-500 text-purple-700 hover:bg-purple-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLogoutConfirm}
+              className="bg-gradient-to-r from-[#b81ce3] via-[#cc18d9] to-[#e316cd] text-white hover:opacity-90"
+            >
+              Sign Out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

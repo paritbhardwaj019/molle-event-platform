@@ -9,6 +9,7 @@ import DatingKycApprovalEmail from "@/templates/dating-kyc-approval";
 import PayoutRequestedEmail from "@/templates/payout-requested";
 import PayoutApprovedEmail from "@/templates/payout-approved";
 import PayoutRejectedEmail from "@/templates/payout-rejected";
+import PasswordResetCodeEmail from "@/templates/password-reset-code";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -286,6 +287,33 @@ export async function sendPayoutRejectedEmail(
     return { success: true };
   } catch (error) {
     console.error("❌ Error sending payout rejected email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function sendPasswordResetEmail(
+  userName: string,
+  userEmail: string,
+  resetCode: string
+) {
+  try {
+    const emailHtml = await renderAsync(
+      <PasswordResetCodeEmail userName={userName} resetCode={resetCode} />
+    );
+
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL!,
+      to: userEmail,
+      subject: "🔐 Password Reset Code - Molle",
+      html: emailHtml,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error sending password reset email:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getEventBySlug, getEventPackages } from "@/lib/actions/event";
 import { createBookingWithPayment } from "@/lib/actions/payment";
+import { createFreeBooking } from "@/lib/actions/booking";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
@@ -554,6 +555,32 @@ export default function BookingPage() {
         })),
       }));
 
+      // Check if this is a free booking (total amount is 0)
+      if (totalAmount === 0) {
+        const result = await createFreeBooking({
+          eventId: event.id,
+          packageSelections: packageSelections,
+          referralCode: referralCode || undefined,
+        });
+
+        if (!result.success || !result.data) {
+          toast.error(result.error || "Failed to create booking");
+          setIsProcessingPayment(false);
+          return;
+        }
+
+        // Show success and redirect
+        toast.success("Free tickets booked successfully!");
+        setPaymentStatus("success");
+        setBookingDetails({
+          bookingNumber: result.data.bookingNumber,
+          ticketsCount: getTotalTickets(),
+        });
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      // Handle paid booking with payment flow
       const result = await createBookingWithPayment({
         eventId: event.id,
         packageSelections: packageSelections,
@@ -752,6 +779,11 @@ export default function BookingPage() {
                                   <h3 className="text-lg font-bold text-white">
                                     {pkg.name}
                                   </h3>
+                                  {packagePrice === 0 && (
+                                    <Badge className="bg-green-600 text-white whitespace-nowrap">
+                                      FREE
+                                    </Badge>
+                                  )}
                                   {pkg.isFullHouse && (
                                     <Badge className="bg-red-600 text-white whitespace-nowrap">
                                       FULL HOUSE
@@ -777,14 +809,20 @@ export default function BookingPage() {
                               </div>
                               <div className="text-right ml-6">
                                 <div className="text-2xl font-bold text-yellow-400">
-                                  ₹{packagePrice.toFixed(2)}
+                                  {packagePrice === 0 ? (
+                                    <span className="text-green-400">FREE</span>
+                                  ) : (
+                                    `₹${packagePrice.toFixed(2)}`
+                                  )}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   per ticket
                                 </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  (Base price)
-                                </div>
+                                {packagePrice > 0 && (
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    (Base price)
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -1086,8 +1124,16 @@ export default function BookingPage() {
                       Review Your Booking
                     </h2>
                     <p className="text-gray-400">
-                      Please review your selection before payment
+                      {getTotalAmount() === 0
+                        ? "Please review your selection before confirming"
+                        : "Please review your selection before payment"}
                     </p>
+                    {getTotalAmount() === 0 && (
+                      <div className="mt-3 inline-flex items-center gap-2 bg-green-600/20 border border-green-600/50 text-green-400 px-4 py-2 rounded-full text-sm">
+                        <Check className="w-4 h-4" />
+                        This is a free booking - no payment required
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 sm:p-6">
@@ -1107,11 +1153,11 @@ export default function BookingPage() {
 
                         const packagePrice = toNumber(pkg.price);
                         const cgstAmount =
-                          packagePrice * (fees.cgstPercentage / 100);
+                          packagePrice * ((fees?.cgstPercentage || 9) / 100);
                         const sgstAmount =
-                          packagePrice * (fees.sgstPercentage / 100);
+                          packagePrice * ((fees?.sgstPercentage || 9) / 100);
                         const userFeeAmount =
-                          packagePrice * (fees.userFeePercentage / 100);
+                          packagePrice * ((fees?.userFeePercentage || 5) / 100);
                         const finalPricePerTicket =
                           packagePrice +
                           cgstAmount +
@@ -1289,12 +1335,23 @@ export default function BookingPage() {
                   <Button
                     onClick={handlePayment}
                     disabled={isProcessingPayment}
-                    className="ml-auto bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-3 text-lg font-semibold w-full"
+                    className={`ml-auto text-white px-8 py-3 text-lg font-semibold w-full ${
+                      getTotalAmount() === 0
+                        ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                        : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                    }`}
                   >
                     {isProcessingPayment ? (
                       <>
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Processing Payment...
+                        {getTotalAmount() === 0
+                          ? "Booking..."
+                          : "Processing Payment..."}
+                      </>
+                    ) : getTotalAmount() === 0 ? (
+                      <>
+                        <Ticket className="w-5 h-5 mr-2" />
+                        Confirm Free Booking
                       </>
                     ) : (
                       <>

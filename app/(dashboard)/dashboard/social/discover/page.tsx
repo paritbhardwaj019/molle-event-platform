@@ -44,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { getUserSubscriptionStatus } from "@/lib/actions/package";
 import { getMyDatingKyc, likeUser } from "@/lib/actions/dating";
+import { KycVerificationDialog } from "@/components/social/kyc-verification-dialog";
 
 interface UserProfile {
   id: string;
@@ -172,6 +173,10 @@ export default function SocialDiscoverPage() {
   const [dialogNewInterest, setDialogNewInterest] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showKycDialog, setShowKycDialog] = useState(false);
+  const [pendingSwipeAction, setPendingSwipeAction] = useState<
+    (() => void) | null
+  >(null);
 
   // Fetch user preferences
   const fetchPreferences = useCallback(async () => {
@@ -310,52 +315,78 @@ export default function SocialDiscoverPage() {
           }
         }
 
-        const response = await fetch("/api/social/swipe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ swipedUserId: userId, action }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          // Update local subscription status
-          if (subscriptionStatus && data.data.swipeInfo) {
-            setSubscriptionStatus((prev: any) => ({
-              ...prev,
-              dailySwipeRemaining: data.data.swipeInfo.hasActiveSubscription
-                ? data.data.swipeInfo.remaining -
-                  data.data.swipeInfo.freeSwipesRemaining
-                : 0,
-              freeSwipesRemaining: data.data.swipeInfo.freeSwipesRemaining,
-            }));
-          }
-
-          // If it's a like, also create a like record
-          if (action === "LIKE") {
-            const likeResult = await likeUser(userId);
-            if (likeResult.success && likeResult.data?.isMatch) {
-              return {
-                isMatch: true,
-                swipeInfo: data.data.swipeInfo,
-              };
-            }
-          }
-
-          return {
-            isMatch: data.data.isMatch,
-            swipeInfo: data.data.swipeInfo,
-          };
-        } else {
-          return { error: data.error };
+        // Check KYC status for likes (dating connections)
+        if (action === "LIKE" && kycStatus && kycStatus !== "APPROVED") {
+          // Show KYC dialog for dating connections
+          setPendingSwipeAction(() => () => performSwipe(userId, action));
+          setShowKycDialog(true);
+          return { error: "KYC dialog shown" };
         }
+
+        return await performSwipe(userId, action);
       } catch (error) {
         console.error("Swipe failed:", error);
         return { error: "Failed to process swipe" };
       }
     },
-    [subscriptionStatus]
+    [subscriptionStatus, kycStatus]
   );
+
+  // Perform the actual swipe action
+  const performSwipe = async (userId: string, action: "LIKE" | "PASS") => {
+    try {
+      const response = await fetch("/api/social/swipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ swipedUserId: userId, action }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local subscription status
+        if (subscriptionStatus && data.data.swipeInfo) {
+          setSubscriptionStatus((prev: any) => ({
+            ...prev,
+            dailySwipeRemaining: data.data.swipeInfo.hasActiveSubscription
+              ? data.data.swipeInfo.remaining -
+                data.data.swipeInfo.freeSwipesRemaining
+              : 0,
+            freeSwipesRemaining: data.data.swipeInfo.freeSwipesRemaining,
+          }));
+        }
+
+        // If it's a like, also create a like record
+        if (action === "LIKE") {
+          const likeResult = await likeUser(userId);
+          if (likeResult.success && likeResult.data?.isMatch) {
+            return {
+              isMatch: true,
+              swipeInfo: data.data.swipeInfo,
+            };
+          }
+        }
+
+        return {
+          isMatch: data.data.isMatch,
+          swipeInfo: data.data.swipeInfo,
+        };
+      } else {
+        return { error: data.error };
+      }
+    } catch (error) {
+      console.error("Swipe failed:", error);
+      return { error: "Failed to process swipe" };
+    }
+  };
+
+  // Handle KYC dialog continue
+  const handleKycDialogContinue = () => {
+    if (pendingSwipeAction) {
+      pendingSwipeAction();
+      setPendingSwipeAction(null);
+    }
+  };
 
   // Update preferences
   const updatePreferences = async (
@@ -1749,6 +1780,18 @@ export default function SocialDiscoverPage() {
           fetchSubscriptionStatus();
           fetchUsers(true);
         }}
+      />
+
+      {/* KYC Verification Dialog */}
+      <KycVerificationDialog
+        isOpen={showKycDialog}
+        onClose={() => {
+          setShowKycDialog(false);
+          setPendingSwipeAction(null);
+        }}
+        kycStatus={kycStatus}
+        context="discover"
+        onContinue={handleKycDialogContinue}
       />
     </div>
   );

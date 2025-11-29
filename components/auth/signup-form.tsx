@@ -26,6 +26,7 @@ import { signupSchema, type SignupFormData } from "@/lib/validations/auth";
 import { signup, googleSignUp } from "@/lib/actions/auth";
 import { UserRole } from "@prisma/client";
 import { auth } from "@/lib/auth";
+import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
 
 type SignupRole = Exclude<UserRole, "ADMIN">;
 
@@ -41,6 +42,7 @@ export default function SignupForm({
   const router = useRouter();
   const [serverError, setServerError] = useState<string>();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const { refreshUser } = useLoggedInUser();
 
   const {
     register,
@@ -73,6 +75,9 @@ export default function SignupForm({
       if (result.error) {
         setServerError(result.error);
       } else {
+        // Refresh auth state immediately so header and nav update without page refresh
+        await refreshUser();
+
         // Redirect based on user role
         if (result.user?.role === "USER") {
           router.push("/");
@@ -105,6 +110,9 @@ export default function SignupForm({
           // which will handle the phone number popup
           router.push("/signup?googleSignup=true");
         } else {
+          // Refresh auth state immediately so header and nav update without page refresh
+          await refreshUser();
+
           // Redirect based on user role
           if (watchedRole === "USER") {
             router.push("/");
