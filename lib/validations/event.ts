@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const packageSchema = z.object({
+  id: z.string().optional(), // Optional ID for existing packages during updates
   name: z.string().min(1, "Package name is required"),
   description: z.string().optional(),
   price: z.number().min(0, "Price must be greater than or equal to 0"),

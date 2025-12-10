@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useLoggedInUser } from "@/lib/hooks/use-logged-in-user";
 import { SwipeStack } from "@/components/social/swipe-stack";
 import { PurchaseSwipesDialog } from "@/components/social/purchase-swipes-dialog";
 import { PackagesPopup } from "@/components/social/packages-popup";
-import { UnreadLikesSection } from "@/components/social/unread-likes-section";
 import { ProfilePhotosUpload } from "@/components/profile/profile-photos-upload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +41,7 @@ import { toast } from "sonner";
 import { CitySearch } from "@/components/ui/city-search";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { getUserSubscriptionStatus } from "@/lib/actions/package";
 import { getMyDatingKyc, likeUser } from "@/lib/actions/dating";
 import { KycVerificationDialog } from "@/components/social/kyc-verification-dialog";
@@ -145,8 +145,10 @@ const popularInterests = [
   "Birthday Celebrations",
 ];
 
-export default function SocialDiscoverPage() {
+function SocialDiscoverPageContent() {
   const { user } = useLoggedInUser();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [swipeInfo, setSwipeInfo] = useState<SwipeInfo>({
     swipesUsed: 0,
@@ -678,6 +680,22 @@ export default function SocialDiscoverPage() {
     }
   }, [isSetupComplete, users.length, fetchUsers]);
 
+  // Handle query params to open dialogs
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action === "settings" && preferences) {
+      setShowPreferences(true);
+      setDialogPreferences({ ...preferences });
+      setDialogNewInterest("");
+      // Remove query param from URL
+      router.replace("/dashboard/social/discover", { scroll: false });
+    } else if (action === "delete") {
+      setShowDeleteConfirm(true);
+      // Remove query param from URL
+      router.replace("/dashboard/social/discover", { scroll: false });
+    }
+  }, [searchParams, preferences, router]);
+
   if (!user) {
     return <div>Loading...</div>;
   }
@@ -1082,29 +1100,30 @@ export default function SocialDiscoverPage() {
   }
 
   return (
-    <div className="px-4 py-8">
+    <div className="px-2 sm:px-4 py-4 sm:py-8">
       <div className="mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-              Discover People
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
-              Find people with shared interests near you
-            </p>
-          </div>
+        {/* Main Content */}
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Swipe Area */}
+          <div className="lg:col-span-2">
+            <SwipeStack
+              users={users}
+              onSwipe={handleSwipe}
+              onLoadMore={() => fetchUsers(false)}
+              isLoading={isLoading}
+              hasMore={hasMore}
+              swipeInfo={swipeInfo}
+              onPurchaseSwipes={handlePurchaseSwipes}
+              dailyLimitExceeded={dailyLimitExceeded}
+              noUsersFound={noUsersFound}
+              pricingTiers={pricingTiers}
+            />
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+            {/* Settings Dialog - Triggered via query param */}
             <Dialog
               open={showPreferences}
               onOpenChange={handlePreferencesDialogOpen}
             >
-              <DialogTrigger asChild>
-                <Button variant="outline" className="w-full sm:w-auto">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Profile Settings
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="flex items-center">
@@ -1147,296 +1166,240 @@ export default function SocialDiscoverPage() {
                           const isSelected =
                             dialogPreferences.connectionTypes?.includes(
                               option.value
-                            );
+                            ) || false;
 
                           return (
-                            <div
+                            <button
                               key={option.value}
-                              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                isSelected
-                                  ? `border-${option.color}-500 bg-${option.color}-50 dark:bg-${option.color}-900/20`
-                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                              }`}
+                              type="button"
                               onClick={() => {
-                                const currentTypes =
-                                  dialogPreferences.connectionTypes || [];
-                                const newTypes = isSelected
-                                  ? currentTypes.filter(
-                                      (t) => t !== option.value
-                                    )
-                                  : [...currentTypes, option.value];
-
-                                setDialogPreferences((prev) =>
-                                  prev
-                                    ? { ...prev, connectionTypes: newTypes }
-                                    : null
-                                );
-                              }}
-                            >
-                              <div className="flex items-center space-x-3">
-                                <IconComponent
-                                  className={`w-5 h-5 text-${option.color}-600`}
-                                />
-                                <span className="font-medium">
-                                  {option.label}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Preferred Gender */}
-                    <div className="space-y-3">
-                      <Label>Preferred Gender</Label>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Choose which gender you'd like to see in your discovery
-                        feed
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div
-                          className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                            !dialogPreferences.gender
-                              ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
-                          onClick={() => {
-                            setDialogPreferences((prev) =>
-                              prev
-                                ? {
+                                setDialogPreferences((prev) => {
+                                  if (!prev) return null;
+                                  const currentTypes =
+                                    prev.connectionTypes || [];
+                                  const newTypes = isSelected
+                                    ? currentTypes.filter(
+                                        (t) => t !== option.value
+                                      )
+                                    : [...currentTypes, option.value];
+                                  return {
                                     ...prev,
-                                    gender: undefined,
-                                  }
-                                : null
-                            );
-                          }}
-                        >
-                          <span className="font-medium">No Preference</span>
-                        </div>
-                        {genderOptions.map((option) => {
-                          const isSelected =
-                            dialogPreferences.gender === option.value;
-                          return (
-                            <div
-                              key={option.value}
-                              className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    connectionTypes: newTypes,
+                                  };
+                                });
+                              }}
+                              className={`flex items-center space-x-3 p-4 rounded-lg border-2 transition-all ${
                                 isSelected
                                   ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                                  : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
                               }`}
-                              onClick={() => {
-                                setDialogPreferences((prev) =>
-                                  prev
-                                    ? {
-                                        ...prev,
-                                        gender: option.value,
-                                      }
-                                    : null
-                                );
-                              }}
                             >
-                              <span className="font-medium">
+                              <IconComponent
+                                className={`w-5 h-5 ${
+                                  isSelected
+                                    ? "text-purple-600"
+                                    : "text-gray-400"
+                                }`}
+                              />
+                              <span
+                                className={`font-medium ${
+                                  isSelected
+                                    ? "text-purple-600"
+                                    : "text-gray-700 dark:text-gray-300"
+                                }`}
+                              >
                                 {option.label}
                               </span>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
                     </div>
 
                     {/* Relationship Status */}
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <Label>Relationship Status</Label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {relationshipOptions.map((option) => {
-                          const isSelected =
-                            dialogPreferences.relationshipStatus ===
-                            option.value;
-                          return (
-                            <div
-                              key={option.value}
-                              className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                isSelected
-                                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                              }`}
-                              onClick={() => {
-                                setDialogPreferences((prev) =>
-                                  prev
-                                    ? {
-                                        ...prev,
-                                        relationshipStatus: option.value,
-                                      }
-                                    : null
-                                );
-                              }}
-                            >
-                              <span className="font-medium">
-                                {option.label}
-                              </span>
-                            </div>
-                          );
-                        })}
+                      <div className="grid grid-cols-2 gap-2">
+                        {relationshipOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setDialogPreferences((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      relationshipStatus: option.value,
+                                    }
+                                  : null
+                              );
+                            }}
+                            className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                              dialogPreferences.relationshipStatus ===
+                              option.value
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600"
+                                : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Age and Gender */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="dialog-age">Age</Label>
-                        <Input
-                          id="dialog-age"
-                          type="number"
-                          min="18"
-                          max="100"
-                          placeholder="Enter your age"
-                          value={dialogPreferences.age?.toString() || ""}
-                          onChange={(e) =>
-                            setDialogPreferences((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    age: e.target.value
-                                      ? parseInt(e.target.value)
-                                      : undefined,
-                                  }
-                                : null
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="dialog-gender">Gender</Label>
-                        <select
-                          id="dialog-gender"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          value={dialogPreferences.gender || ""}
-                          onChange={(e) =>
-                            setDialogPreferences((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    gender: e.target.value || undefined,
-                                  }
-                                : null
-                            )
-                          }
-                        >
-                          <option value="">Select gender</option>
-                          {genderOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                    {/* Gender */}
+                    <div className="space-y-2">
+                      <Label>Gender</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {genderOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setDialogPreferences((prev) =>
+                                prev ? { ...prev, gender: option.value } : null
+                              );
+                            }}
+                            className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                              dialogPreferences.gender === option.value
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600"
+                                : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
                     {/* Bio */}
                     <div className="space-y-2">
-                      <Label htmlFor="dialog-bio">Bio</Label>
+                      <Label>Bio</Label>
                       <Textarea
-                        id="dialog-bio"
-                        placeholder="Tell people a bit about yourself..."
                         value={dialogPreferences.bio || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
                           setDialogPreferences((prev) =>
                             prev ? { ...prev, bio: e.target.value } : null
-                          )
-                        }
+                          );
+                        }}
+                        placeholder="Tell people about yourself..."
+                        className="min-h-[100px]"
                         maxLength={500}
                       />
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {dialogPreferences.bio?.length || 0}/500 characters
+                      <p className="text-xs text-gray-500">
+                        {(dialogPreferences.bio || "").length}/500 characters
                       </p>
-                    </div>
-
-                    {/* Profile Photos */}
-                    <div className="space-y-3">
-                      <Label>Profile Photos</Label>
-                      <ProfilePhotosUpload
-                        currentPhotos={dialogPreferences.photos || []}
-                        onPhotosChange={(photos) =>
-                          setDialogPreferences((prev) =>
-                            prev ? { ...prev, photos } : null
-                          )
-                        }
-                        disabled={false}
-                        maxPhotos={6}
-                      />
                     </div>
 
                     {/* Interests */}
                     <div className="space-y-3">
                       <Label>Interests</Label>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {popularInterests.map((interest) => {
-                          const isSelected =
-                            dialogPreferences.interests?.includes(interest);
-                          return (
-                            <Badge
-                              key={interest}
-                              variant={isSelected ? "default" : "outline"}
-                              className="cursor-pointer"
+                      <div className="flex flex-wrap gap-2">
+                        {dialogPreferences.interests?.map((interest) => (
+                          <Badge
+                            key={interest}
+                            variant="secondary"
+                            className="text-sm px-3 py-1"
+                          >
+                            {interest}
+                            <button
+                              type="button"
                               onClick={() => {
-                                const currentInterests =
-                                  dialogPreferences.interests || [];
-                                const newInterests = isSelected
-                                  ? currentInterests.filter(
-                                      (i) => i !== interest
-                                    )
-                                  : [...currentInterests, interest];
-
                                 setDialogPreferences((prev) =>
                                   prev
-                                    ? { ...prev, interests: newInterests }
+                                    ? {
+                                        ...prev,
+                                        interests:
+                                          prev.interests?.filter(
+                                            (i) => i !== interest
+                                          ) || [],
+                                      }
                                     : null
                                 );
                               }}
+                              className="ml-2 hover:text-red-500"
                             >
-                              {interest}
-                            </Badge>
-                          );
-                        })}
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
+                        ))}
                       </div>
-
-                      <div className="flex space-x-2">
+                      <div className="flex gap-2">
                         <Input
-                          placeholder="Add custom interest..."
                           value={dialogNewInterest}
                           onChange={(e) => setDialogNewInterest(e.target.value)}
-                          onKeyPress={(e) =>
-                            e.key === "Enter" && addDialogInterest()
-                          }
+                          placeholder="Add an interest"
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter" && dialogNewInterest.trim()) {
+                              setDialogPreferences((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      interests: [
+                                        ...(prev.interests || []),
+                                        dialogNewInterest.trim(),
+                                      ],
+                                    }
+                                  : null
+                              );
+                              setDialogNewInterest("");
+                            }
+                          }}
                         />
                         <Button
-                          onClick={addDialogInterest}
-                          size="icon"
-                          variant="outline"
+                          type="button"
+                          onClick={() => {
+                            if (dialogNewInterest.trim()) {
+                              setDialogPreferences((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      interests: [
+                                        ...(prev.interests || []),
+                                        dialogNewInterest.trim(),
+                                      ],
+                                    }
+                                  : null
+                              );
+                              setDialogNewInterest("");
+                            }
+                          }}
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
                       </div>
-
-                      {dialogPreferences.interests &&
-                        dialogPreferences.interests.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {dialogPreferences.interests.map((interest) => (
-                              <Badge
-                                key={interest}
-                                variant="secondary"
-                                className="gap-1"
-                              >
-                                {interest}
-                                <X
-                                  className="w-3 h-3 cursor-pointer"
-                                  onClick={() => removeDialogInterest(interest)}
-                                />
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                      <div className="flex flex-wrap gap-2">
+                        {popularInterests
+                          .filter(
+                            (interest) =>
+                              !dialogPreferences.interests?.includes(interest)
+                          )
+                          .slice(0, 10)
+                          .map((interest) => (
+                            <Button
+                              key={interest}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setDialogPreferences((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        interests: [
+                                          ...(prev.interests || []),
+                                          interest,
+                                        ],
+                                      }
+                                    : null
+                                );
+                              }}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              {interest}
+                            </Button>
+                          ))}
+                      </div>
                     </div>
 
                     {/* Privacy Settings */}
@@ -1445,69 +1408,77 @@ export default function SocialDiscoverPage() {
                       <div className="space-y-3">
                         <div className="flex items-center space-x-2">
                           <Checkbox
-                            id="dialog-discoverable"
-                            checked={dialogPreferences.discoverable || false}
-                            onCheckedChange={(checked) =>
-                              setDialogPreferences((prev) =>
-                                prev
-                                  ? { ...prev, discoverable: !!checked }
-                                  : null
-                              )
-                            }
-                          />
-                          <Label htmlFor="dialog-discoverable">
-                            Make my profile discoverable
-                          </Label>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="dialog-showAge"
-                            checked={dialogPreferences.showAge !== false}
-                            onCheckedChange={(checked) =>
+                            id="showAge"
+                            checked={dialogPreferences.showAge || false}
+                            onCheckedChange={(checked) => {
                               setDialogPreferences((prev) =>
                                 prev ? { ...prev, showAge: !!checked } : null
-                              )
-                            }
+                              );
+                            }}
                           />
-                          <Label htmlFor="dialog-showAge">Show my age</Label>
+                          <Label
+                            htmlFor="showAge"
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            Show my age
+                          </Label>
                         </div>
-
                         <div className="flex items-center space-x-2">
                           <Checkbox
-                            id="dialog-showLocation"
+                            id="showLocation"
                             checked={dialogPreferences.showLocation || false}
-                            onCheckedChange={(checked) =>
+                            onCheckedChange={(checked) => {
                               setDialogPreferences((prev) =>
                                 prev
                                   ? { ...prev, showLocation: !!checked }
                                   : null
-                              )
-                            }
+                              );
+                            }}
                           />
-                          <Label htmlFor="dialog-showLocation">
+                          <Label
+                            htmlFor="showLocation"
+                            className="text-sm font-normal cursor-pointer"
+                          >
                             Show my location
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="discoverable"
+                            checked={dialogPreferences.discoverable || false}
+                            onCheckedChange={(checked) => {
+                              setDialogPreferences((prev) =>
+                                prev
+                                  ? { ...prev, discoverable: !!checked }
+                                  : null
+                              );
+                            }}
+                          />
+                          <Label
+                            htmlFor="discoverable"
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            Make my profile discoverable
                           </Label>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex space-x-3 pt-4">
                       <Button
-                        onClick={updateDialogPreferences}
+                        onClick={async () => {
+                          if (dialogPreferences) {
+                            await updatePreferences(dialogPreferences);
+                            handlePreferencesDialogOpen(false);
+                          }
+                        }}
                         className="flex-1"
-                        disabled={
-                          !dialogPreferences.connectionTypes?.length ||
-                          !dialogPreferences.discoverable
-                        }
                       >
-                        Save Changes
+                        Save Preferences
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => setShowPreferences(false)}
-                        className="flex-1"
+                        onClick={() => handlePreferencesDialogOpen(false)}
                       >
                         Cancel
                       </Button>
@@ -1517,21 +1488,11 @@ export default function SocialDiscoverPage() {
               </DialogContent>
             </Dialog>
 
-            {/* Delete Swipe Profile Button */}
+            {/* Delete Profile Dialog - Triggered via query param */}
             <Dialog
               open={showDeleteConfirm}
               onOpenChange={setShowDeleteConfirm}
             >
-              <DialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Profile
-                </Button>
-              </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle className="flex items-center text-red-600">
@@ -1584,35 +1545,9 @@ export default function SocialDiscoverPage() {
               </DialogContent>
             </Dialog>
           </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Swipe Area */}
-          <div className="lg:col-span-2">
-            <SwipeStack
-              users={users}
-              onSwipe={handleSwipe}
-              onLoadMore={() => fetchUsers(false)}
-              isLoading={isLoading}
-              hasMore={hasMore}
-              swipeInfo={swipeInfo}
-              onPurchaseSwipes={handlePurchaseSwipes}
-              dailyLimitExceeded={dailyLimitExceeded}
-              noUsersFound={noUsersFound}
-              pricingTiers={pricingTiers}
-            />
-          </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Unread Likes Section */}
-            <UnreadLikesSection
-              onSwipe={handleSwipe}
-              pricingTiers={pricingTiers}
-              onPurchaseSwipes={handlePurchaseSwipes}
-            />
-
             {/* Subscription Features */}
             {subscriptionStatus?.hasActiveSubscription &&
               subscriptionStatus.activePackage && (
@@ -1647,127 +1582,6 @@ export default function SocialDiscoverPage() {
                   </CardContent>
                 </Card>
               )}
-
-            {/* Current Preferences */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Your Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Looking for
-                  </Label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {preferences?.connectionTypes?.map((type) => (
-                      <Badge key={type} variant="outline" className="text-xs">
-                        {type.toLowerCase()}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Gender Preference */}
-                <div>
-                  <Label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Preferred Gender
-                  </Label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs">
-                      {preferences?.gender
-                        ? genderOptions.find(
-                            (g) => g.value === preferences.gender
-                          )?.label ||
-                          preferences.gender.replace("_", " ").toLowerCase()
-                        : "No Preference"}
-                    </Badge>
-                  </div>
-                </div>
-
-                {(preferences?.age || preferences?.gender) && (
-                  <div>
-                    <Label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      About You
-                    </Label>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {preferences?.age && (
-                        <Badge variant="outline" className="text-xs">
-                          {preferences.age} years old
-                        </Badge>
-                      )}
-                      {preferences?.gender && (
-                        <Badge variant="outline" className="text-xs">
-                          {genderOptions.find(
-                            (g) => g.value === preferences.gender
-                          )?.label || preferences.gender}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {preferences?.interests && preferences.interests.length > 0 && (
-                  <div>
-                    <Label className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      Interests
-                    </Label>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {preferences.interests.slice(0, 8).map((interest) => (
-                        <Badge
-                          key={interest}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {interest}
-                        </Badge>
-                      ))}
-                      {preferences.interests.length > 8 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{preferences.interests.length - 8}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Tips */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Tips for Better Matches
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-purple-600 dark:text-purple-400 text-xs font-bold">
-                      1
-                    </span>
-                  </div>
-                  <p>
-                    Add a bio and interests to your profile for better matches
-                  </p>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-purple-600 dark:text-purple-400 text-xs font-bold">
-                      2
-                    </span>
-                  </div>
-                  <p>Be selective with your likes to improve match quality</p>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-purple-600 dark:text-purple-400 text-xs font-bold">
-                      3
-                    </span>
-                  </div>
-                  <p>Start conversations with matches to build connections</p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
@@ -1794,5 +1608,22 @@ export default function SocialDiscoverPage() {
         onContinue={handleKycDialogContinue}
       />
     </div>
+  );
+}
+
+export default function SocialDiscoverPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
+            <div className="h-6 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4" />
+            <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          </div>
+        </div>
+      }
+    >
+      <SocialDiscoverPageContent />
+    </Suspense>
   );
 }

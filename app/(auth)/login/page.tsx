@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,14 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshUser } = useLoggedInUser();
+
+  // If coming from mobile gate with forgot password flag, open forgot form directly
+  useEffect(() => {
+    const forgot = searchParams.get("forgotPassword");
+    if (forgot === "true") {
+      setShowForgotPassword(true);
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -122,7 +130,6 @@ function LoginContent() {
     setShowEmailLogin(true);
   };
 
-  // Show forgot password form
   if (showForgotPassword) {
     return (
       <div className="min-h-screen bg-[#121212] flex items-center justify-center p-8">
@@ -136,6 +143,9 @@ function LoginContent() {
       </div>
     );
   }
+
+  const redirectTarget =
+    searchParams.get("redirectTo") || searchParams.get("redirect") || "";
 
   return (
     <div className="min-h-screen bg-[#121212] flex">
@@ -356,7 +366,14 @@ function LoginContent() {
 
             <p className="text-center text-sm text-white/70">
               Don't have an account?{" "}
-              <Link href="/signup" className="text-primary hover:underline">
+              <Link
+                href={
+                  redirectTarget
+                    ? `/signup?redirectTo=${encodeURIComponent(redirectTarget)}`
+                    : "/signup"
+                }
+                className="text-primary hover:underline"
+              >
                 Sign up for free
               </Link>
             </p>

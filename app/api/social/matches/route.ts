@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
                 photos: true,
                 connectionTypes: true,
                 showAge: true,
+                cityId: true,
               },
             },
           },
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
                 photos: true,
                 connectionTypes: true,
                 showAge: true,
+                cityId: true,
               },
             },
           },
@@ -102,6 +104,10 @@ export async function GET(request: NextRequest) {
             )
           : null;
 
+      // Get current user's city
+      const currentUser =
+        match.user1Id === session.user.id ? match.user1 : match.user2;
+
       return {
         id: match.id,
         conversationId: match.conversationId,
@@ -118,7 +124,9 @@ export async function GET(request: NextRequest) {
           photos: otherUser.userPreferences?.photos || [],
           connectionTypes: otherUser.userPreferences?.connectionTypes || [],
           hasBadge: otherUser.activePackage?.allowBadge || false,
+          cityId: otherUser.userPreferences?.cityId || null,
         },
+        currentUserCityId: currentUser.userPreferences?.cityId || null,
         lastMessage: lastMessage
           ? {
               id: lastMessage.id,

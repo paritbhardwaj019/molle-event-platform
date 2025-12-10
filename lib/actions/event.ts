@@ -249,9 +249,34 @@ export async function getAllEvents({
         },
       });
 
+      // Serialize Decimal fields for client components
+      const serializedEvents = events.map((event) => ({
+        ...event,
+        referralPercentage:
+          event.referralPercentage instanceof Prisma.Decimal
+            ? Number(event.referralPercentage)
+            : event.referralPercentage,
+        packages: event.packages.map((pkg) => ({
+          ...pkg,
+          price:
+            pkg.price instanceof Prisma.Decimal ? Number(pkg.price) : pkg.price,
+        })),
+        bookings: event.bookings.map((booking) => ({
+          ...booking,
+          totalAmount:
+            booking.totalAmount instanceof Prisma.Decimal
+              ? Number(booking.totalAmount)
+              : booking.totalAmount,
+          referralDiscount:
+            booking.referralDiscount instanceof Prisma.Decimal
+              ? Number(booking.referralDiscount)
+              : booking.referralDiscount,
+        })),
+      }));
+
       return {
         success: true,
-        data: events,
+        data: serializedEvents,
       };
     }
 
@@ -339,9 +364,34 @@ export async function getAllEvents({
       },
     });
 
+    // Serialize Decimal fields for client components
+    const serializedEvents = events.map((event) => ({
+      ...event,
+      referralPercentage:
+        event.referralPercentage instanceof Prisma.Decimal
+          ? Number(event.referralPercentage)
+          : event.referralPercentage,
+      packages: event.packages.map((pkg) => ({
+        ...pkg,
+        price:
+          pkg.price instanceof Prisma.Decimal ? Number(pkg.price) : pkg.price,
+      })),
+      bookings: event.bookings.map((booking) => ({
+        ...booking,
+        totalAmount:
+          booking.totalAmount instanceof Prisma.Decimal
+            ? Number(booking.totalAmount)
+            : booking.totalAmount,
+        referralDiscount:
+          booking.referralDiscount instanceof Prisma.Decimal
+            ? Number(booking.referralDiscount)
+            : booking.referralDiscount,
+      })),
+    }));
+
     return {
       success: true,
-      data: events,
+      data: serializedEvents,
     };
   } catch (error) {
     console.error("Error fetching events:", error);
@@ -875,20 +925,38 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
       },
     });
 
-    // Create a map of existing packages by name for easy lookup
-    const existingPackageMap = new Map(
+    // Create maps for lookup: by ID and by name
+    const existingPackageMapById = new Map(
+      existingPackages.map((pkg) => [pkg.id, pkg])
+    );
+    const existingPackageMapByName = new Map(
       existingPackages.map((pkg) => [pkg.name, pkg])
     );
 
+    // Track which existing packages have been updated
+    const updatedPackageIds = new Set<string>();
+
     // Process each package from the form data
     for (const newPkg of validatedData.packages) {
-      const existingPkg = existingPackageMap.get(newPkg.name);
+      let existingPkg: (typeof existingPackages)[0] | undefined;
+
+      // First, try to match by ID if provided (for existing packages)
+      if (newPkg.id) {
+        existingPkg = existingPackageMapById.get(newPkg.id);
+      }
+
+      // If not found by ID, try to match by name (for backward compatibility)
+      if (!existingPkg) {
+        existingPkg = existingPackageMapByName.get(newPkg.name);
+      }
 
       if (existingPkg) {
         // Update existing package
+        // Name can be changed safely since bookings reference packages by ID, not name
         await db.package.update({
           where: { id: existingPkg.id },
           data: {
+            name: newPkg.name,
             description: newPkg.description,
             price: newPkg.price,
             maxTickets: newPkg.maxTicketsPerBooking,
@@ -896,8 +964,10 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
             benefits: newPkg.includedItems,
           },
         });
+
+        updatedPackageIds.add(existingPkg.id);
       } else {
-        // Create new package
+        // Create new package - no matching existing package found
         await db.package.create({
           data: {
             eventId,
@@ -914,11 +984,20 @@ export async function updateEvent(eventId: string, data: EventUpdateData) {
 
     // Find packages that are no longer in the form data and delete them
     // Only delete packages that don't have any bookings to avoid data loss
+    const formPackageIds = new Set(
+      validatedData.packages
+        .map((pkg) => pkg.id)
+        .filter((id): id is string => !!id)
+    );
     const formPackageNames = new Set(
       validatedData.packages.map((pkg) => pkg.name)
     );
     const packagesToDelete = existingPackages.filter(
-      (pkg) => !formPackageNames.has(pkg.name) && pkg._count.bookings === 0
+      (pkg) =>
+        !updatedPackageIds.has(pkg.id) &&
+        !formPackageIds.has(pkg.id) &&
+        !formPackageNames.has(pkg.name) &&
+        pkg._count.bookings === 0
     );
 
     if (packagesToDelete.length > 0) {
@@ -1055,6 +1134,7 @@ export async function getEventById(eventId: string) {
       },
       amenities: event.amenities.map((ea) => ea.amenity.name),
       packages: event.packages.map((pkg) => ({
+        id: pkg.id, // Include package ID for updates
         name: pkg.name,
         description: pkg.description || "",
         price: Number(pkg.price),

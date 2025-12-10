@@ -32,8 +32,8 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {!shouldHideSidebar && <Sidebar />}
-      <div className="flex flex-col flex-1 overflow-hidden lg:ml-0">
+      {/* Sidebar removed - navigation now in header menu */}
+      <div className="flex flex-col flex-1 overflow-hidden w-full">
         <Header />
         <main
           className={`flex-1 ${isMessagesPage ? "overflow-hidden" : "overflow-y-auto"}`}

@@ -77,6 +77,9 @@ export function SwipeStack({
   const [currentSwipeInfo, setCurrentSwipeInfo] = useState(swipeInfo);
   const [matches, setMatches] = useState<string[]>([]);
   const [swipedUsers, setSwipedUsers] = useState<string[]>([]);
+  const [lastSwipedUser, setLastSwipedUser] = useState<UserProfile | null>(
+    null
+  );
   const tinderCardRefs = useRef<{ [key: string]: any }>({});
 
   useEffect(() => {
@@ -111,10 +114,28 @@ export function SwipeStack({
 
       try {
         const action = direction === "right" ? "LIKE" : "PASS";
+        const swipedUser = currentUsers.find((u) => u.id === swipedUserId);
+
+        // Store the last swiped user for restore functionality
+        if (swipedUser) {
+          setLastSwipedUser(swipedUser);
+        }
+
         const result = await onSwipe(swipedUserId, action);
 
         if (result.error) {
           toast.error(result.error);
+          // Restore the user if swipe failed
+          if (lastSwipedUser && lastSwipedUser.id === swipedUserId) {
+            setCurrentUsers((prev) => {
+              // Check if user is already in the stack
+              if (prev.some((u) => u.id === lastSwipedUser.id)) {
+                return prev;
+              }
+              return [lastSwipedUser, ...prev];
+            });
+            setLastSwipedUser(null);
+          }
           return;
         }
 
@@ -138,6 +159,17 @@ export function SwipeStack({
       } catch (error) {
         toast.error("Failed to process swipe. Please try again.");
         console.error("Swipe error:", error);
+        // Restore the user if swipe failed
+        if (lastSwipedUser && lastSwipedUser.id === swipedUserId) {
+          setCurrentUsers((prev) => {
+            // Check if user is already in the stack
+            if (prev.some((u) => u.id === lastSwipedUser.id)) {
+              return prev;
+            }
+            return [lastSwipedUser, ...prev];
+          });
+          setLastSwipedUser(null);
+        }
       } finally {
         setIsProcessingSwipe(false);
       }
@@ -145,10 +177,11 @@ export function SwipeStack({
     [
       isProcessingSwipe,
       onSwipe,
-      currentUsers.length,
+      currentUsers,
       hasMore,
       isLoading,
       onLoadMore,
+      lastSwipedUser,
     ]
   );
 
@@ -199,6 +232,30 @@ export function SwipeStack({
       onLoadMore();
     }
   };
+
+  const handleRestore = useCallback(() => {
+    if (!lastSwipedUser || isProcessingSwipe) return;
+
+    // Restore the last swiped user to the top of the stack
+    setCurrentUsers((prev) => {
+      // Check if user is already in the stack
+      if (prev.some((u) => u.id === lastSwipedUser.id)) {
+        return prev;
+      }
+      return [lastSwipedUser, ...prev];
+    });
+
+    // Remove from swiped users list
+    setSwipedUsers((prev) => prev.filter((id) => id !== lastSwipedUser.id));
+
+    // Clear the last swiped user
+    setLastSwipedUser(null);
+
+    toast.success("Profile restored!", {
+      description: "You can swipe again on this profile.",
+      duration: 2000,
+    });
+  }, [lastSwipedUser, isProcessingSwipe]);
 
   // No users available
   if (currentUsers.length === 0 && !isLoading) {
@@ -278,7 +335,7 @@ export function SwipeStack({
       )}
 
       {/* Card Stack with improved mobile touch handling */}
-      <div className="relative h-[600px] max-w-md mx-auto overflow-hidden">
+      <div className="relative h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)] max-h-[600px] sm:max-h-[700px] min-h-[400px] sm:min-h-[500px] max-w-md mx-auto overflow-hidden">
         {isLoading && currentUsers.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Card className="w-full h-full">
@@ -385,51 +442,45 @@ export function SwipeStack({
 
       {/* Enhanced Swipe Buttons with better mobile accessibility */}
       {currentUsers.length > 0 && !dailyLimitExceeded && !noUsersFound && (
-        <div className="flex justify-center space-x-6">
-          <Button
-            onClick={() => handleSwipeButton("left")}
-            disabled={isProcessingSwipe}
-            variant="outline"
-            size="lg"
-            className="w-16 h-16 rounded-full border-2 border-red-300 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950 active:scale-95 transition-all duration-200 touch-manipulation"
-            style={{ touchAction: "manipulation" }}
-            aria-label="Pass on this profile"
-          >
-            <X className="w-8 h-8 text-red-500" />
-          </Button>
+        <div className="flex flex-col items-center gap-3 sm:gap-4 pt-3 sm:pt-4">
+          <div className="flex justify-center items-center gap-3 sm:gap-8">
+            <Button
+              onClick={() => handleSwipeButton("left")}
+              disabled={isProcessingSwipe}
+              variant="outline"
+              size="lg"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-red-400 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950 active:scale-90 transition-all duration-200 touch-manipulation shadow-lg"
+              style={{ touchAction: "manipulation" }}
+              aria-label="Pass on this profile"
+            >
+              <X className="w-6 h-6 sm:w-8 sm:h-8 text-red-500" />
+            </Button>
 
-          <Button
-            onClick={() => handleSwipeButton("right")}
-            disabled={isProcessingSwipe}
-            variant="outline"
-            size="lg"
-            className="w-16 h-16 rounded-full border-2 border-green-300 hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-950 active:scale-95 transition-all duration-200 touch-manipulation"
-            style={{ touchAction: "manipulation" }}
-            aria-label="Like this profile"
-          >
-            <Heart className="w-8 h-8 text-green-500" />
-          </Button>
-        </div>
-      )}
+            {/* Restore Button - Always visible in the center */}
+            <Button
+              onClick={handleRestore}
+              disabled={isProcessingSwipe || !lastSwipedUser}
+              variant="outline"
+              size="lg"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-purple-400 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 active:scale-90 transition-all duration-200 touch-manipulation shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ touchAction: "manipulation" }}
+              aria-label="Restore last swiped profile"
+            >
+              <RotateCcw className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500" />
+            </Button>
 
-      {currentUsers.length > 0 && hasMore && (
-        <div className="flex justify-center">
-          <Button
-            variant="ghost"
-            onClick={handleLoadMore}
-            disabled={isLoading}
-            className="text-gray-600 dark:text-gray-400 touch-manipulation"
-            style={{ touchAction: "manipulation" }}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading more...
-              </>
-            ) : (
-              "Load more profiles"
-            )}
-          </Button>
+            <Button
+              onClick={() => handleSwipeButton("right")}
+              disabled={isProcessingSwipe}
+              variant="outline"
+              size="lg"
+              className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-green-400 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-950 active:scale-90 transition-all duration-200 touch-manipulation shadow-lg"
+              style={{ touchAction: "manipulation" }}
+              aria-label="Like this profile"
+            >
+              <Heart className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 fill-current" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -794,14 +794,6 @@ export default function BookingPage() {
                                       {selected} selected
                                     </Badge>
                                   )}
-                                  {!pkg.isFullHouse &&
-                                    pkg.allocation &&
-                                    pkg.remainingTickets <= 5 &&
-                                    pkg.remainingTickets > 0 && (
-                                      <Badge className="bg-orange-600 text-white whitespace-nowrap">
-                                        Only {pkg.remainingTickets} left
-                                      </Badge>
-                                    )}
                                 </div>
                                 <p className="text-gray-400 mb-4">
                                   {pkg.description}

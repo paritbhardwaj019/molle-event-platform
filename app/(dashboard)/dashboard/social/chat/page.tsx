@@ -19,6 +19,8 @@ import {
   Flag,
   UserX,
   ExternalLink,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -44,7 +46,9 @@ interface Match {
     bio?: string;
     interests: string[];
     connectionTypes: string[];
+    cityId?: string | null;
   };
+  currentUserCityId?: string | null;
   lastMessage?: {
     id: string;
     content: string;
@@ -53,6 +57,21 @@ interface Match {
     isRead: boolean;
   };
   hasUnreadMessages: boolean;
+}
+
+interface Event {
+  id: string;
+  title: string;
+  coverImage?: string | null;
+  startDate: string | Date;
+  endDate: string | Date;
+  location: string;
+  city: string;
+  slug: string;
+  organizerName: string;
+  packages?: Array<{
+    price: number | any;
+  }>;
 }
 
 interface Message {
@@ -87,6 +106,8 @@ export default function SocialChatPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch user's matches
@@ -136,10 +157,61 @@ export default function SocialChatPage() {
     }
   }, []);
 
+  // Fetch events for user cities
+  const fetchEvents = useCallback(async (cities: string[]) => {
+    if (cities.length === 0 || !cities.every((city) => city)) {
+      setEvents([]);
+      return;
+    }
+
+    setIsLoadingEvents(true);
+    try {
+      // Fetch events for each city and combine
+      const eventPromises = cities.map(async (city) => {
+        try {
+          const response = await fetch(
+            `/api/events?city=${encodeURIComponent(city)}`
+          );
+          const data = await response.json();
+          return data.success ? data.data || [] : [];
+        } catch (error) {
+          console.error(`Failed to fetch events for city ${city}:`, error);
+          return [];
+        }
+      });
+
+      const eventArrays = await Promise.all(eventPromises);
+      // Flatten and deduplicate by event ID
+      const allEvents = eventArrays.flat();
+      const uniqueEvents = Array.from(
+        new Map(allEvents.map((event: any) => [event.id, event])).values()
+      );
+
+      // Filter only upcoming events and sort by start date
+      const now = new Date();
+      const upcomingEvents = uniqueEvents
+        .filter(
+          (event: any) => new Date(event.endDate || event.startDate) > now
+        )
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
+
+      setEvents(upcomingEvents.slice(0, 10)); // Limit to 10 events
+    } catch (error) {
+      console.error("Failed to fetch events:", error);
+      setEvents([]);
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }, []);
+
   // Send a message
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedMatch?.conversationId || isSending)
+    if (!newMessage.trim() || !selectedMatch?.conversationId || isSending) {
       return;
+    }
 
     setIsSending(true);
     try {
@@ -248,7 +320,24 @@ export default function SocialChatPage() {
     if (selectedMatch?.conversationId) {
       fetchMessages(selectedMatch.conversationId);
     }
-  }, [selectedMatch, fetchMessages]);
+
+    // Fetch events when a match is selected
+    if (selectedMatch) {
+      const cities: string[] = [];
+      if (selectedMatch.currentUserCityId) {
+        cities.push(selectedMatch.currentUserCityId);
+      }
+      if (
+        selectedMatch.user.cityId &&
+        selectedMatch.user.cityId !== selectedMatch.currentUserCityId
+      ) {
+        cities.push(selectedMatch.user.cityId);
+      }
+      fetchEvents(cities);
+    } else {
+      setEvents([]);
+    }
+  }, [selectedMatch, fetchMessages, fetchEvents]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -405,255 +494,364 @@ export default function SocialChatPage() {
         {/* Chat Area */}
         <div className="flex-1 flex flex-col">
           {selectedMatch ? (
-            <>
-              {/* Chat Header */}
-              <div className="p-4 border-b bg-white dark:bg-gray-900">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage src={selectedMatch.user.avatar} />
-                      <AvatarFallback className="bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
-                        {getInitials(selectedMatch.user.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3
-                          className="font-semibold text-gray-900 dark:text-white cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                          onClick={() =>
-                            navigateToUserProfile(
-                              selectedMatch.user.id,
-                              selectedMatch.user.role
-                            )
-                          }
-                        >
-                          {selectedMatch.user.name}
-                        </h3>
-                        <ExternalLink
-                          className="w-4 h-4 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer"
-                          onClick={() =>
-                            navigateToUserProfile(
-                              selectedMatch.user.id,
-                              selectedMatch.user.role
-                            )
-                          }
-                        />
-                      </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {selectedMatch.matchedViaEvent
-                          ? "Connected at event"
-                          : "City match"}{" "}
-                        • Matched{" "}
-                        {formatDistanceToNow(
-                          new Date(selectedMatch.matchedAt),
-                          { addSuffix: true }
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => reportUser(selectedMatch.user.id)}
-                        className="text-orange-600 dark:text-orange-400"
-                      >
-                        <Flag className="w-4 h-4 mr-2" />
-                        Report User
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => unmatchUser(selectedMatch.id)}
-                        className="text-red-600 dark:text-red-400"
-                      >
-                        <UserX className="w-4 h-4 mr-2" />
-                        Unmatch
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {isLoadingMessages ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="max-w-sm mx-auto space-y-4">
-                      <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto">
-                        <MessageCircle className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                      </div>
+            <div className="flex h-full">
+              {/* Main Chat */}
+              <div className="flex-1 flex flex-col">
+                {/* Chat Header */}
+                <div className="p-4 border-b bg-white dark:bg-gray-900">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Avatar className="w-10 h-10">
+                        <AvatarImage src={selectedMatch.user.avatar} />
+                        <AvatarFallback className="bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
+                          {getInitials(selectedMatch.user.name)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          Start your conversation
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-400 mt-2">
-                          Say hello to {selectedMatch.user.name}!
-                          {selectedMatch.user.interests.length > 0 && (
-                            <span>
-                              {" "}
-                              You both like{" "}
-                              {selectedMatch.user.interests[0].toLowerCase()}.
-                            </span>
+                        <div className="flex items-center space-x-2">
+                          <h3
+                            className="font-semibold text-gray-900 dark:text-white cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                            onClick={() =>
+                              navigateToUserProfile(
+                                selectedMatch.user.id,
+                                selectedMatch.user.role
+                              )
+                            }
+                          >
+                            {selectedMatch.user.name}
+                          </h3>
+                          <ExternalLink
+                            className="w-4 h-4 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer"
+                            onClick={() =>
+                              navigateToUserProfile(
+                                selectedMatch.user.id,
+                                selectedMatch.user.role
+                              )
+                            }
+                          />
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {selectedMatch.matchedViaEvent
+                            ? "Connected at event"
+                            : "City match"}{" "}
+                          • Matched{" "}
+                          {formatDistanceToNow(
+                            new Date(selectedMatch.matchedAt),
+                            { addSuffix: true }
                           )}
                         </p>
                       </div>
-
-                      {/* Match Info */}
-                      <Card className="text-left">
-                        <CardContent className="p-4 space-y-3">
-                          <div className="flex items-center space-x-3">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={selectedMatch.user.avatar} />
-                              <AvatarFallback>
-                                {getInitials(selectedMatch.user.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="flex items-center space-x-2">
-                                <p
-                                  className="font-semibold cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                                  onClick={() =>
-                                    navigateToUserProfile(
-                                      selectedMatch.user.id,
-                                      selectedMatch.user.role
-                                    )
-                                  }
-                                >
-                                  {selectedMatch.user.name}
-                                </p>
-                                <ExternalLink
-                                  className="w-4 h-4 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer"
-                                  onClick={() =>
-                                    navigateToUserProfile(
-                                      selectedMatch.user.id,
-                                      selectedMatch.user.role
-                                    )
-                                  }
-                                />
-                              </div>
-                              {selectedMatch.user.age && (
-                                <p className="text-sm text-gray-500">
-                                  {selectedMatch.user.age} years old
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {selectedMatch.user.bio && (
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              {selectedMatch.user.bio}
-                            </p>
-                          )}
-
-                          {selectedMatch.user.interests.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-                                Interests
-                              </p>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedMatch.user.interests
-                                  .slice(0, 6)
-                                  .map((interest) => (
-                                    <Badge
-                                      key={interest}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      {interest}
-                                    </Badge>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
                     </div>
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    const isOwn = message.sender.id === user.id;
-                    return (
-                      <div
-                        key={message.id}
-                        className={`flex ${
-                          isOwn ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <div className="flex items-start space-x-2 max-w-xs lg:max-w-md">
-                          {!isOwn && (
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage src={message.sender.avatar} />
-                              <AvatarFallback className="text-xs">
-                                {getInitials(message.sender.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                          <div
-                            className={`px-4 py-2 rounded-lg ${
-                              isOwn
-                                ? "bg-purple-500 text-white"
-                                : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <span className="text-xs opacity-70">
-                              {new Date(message.createdAt).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )}
-                            </span>
-                          </div>
-                          {isOwn && (
-                            <Avatar className="w-6 h-6">
-                              <AvatarImage src={user.avatar || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {getInitials(user.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
 
-              {/* Message Input */}
-              <div className="p-4 border-t bg-white dark:bg-gray-900">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Type your message..."
-                    disabled={isSending}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() || isSending}
-                  >
-                    {isSending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                  </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => reportUser(selectedMatch.user.id)}
+                          className="text-orange-600 dark:text-orange-400"
+                        >
+                          <Flag className="w-4 h-4 mr-2" />
+                          Report User
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => unmatchUser(selectedMatch.id)}
+                          className="text-red-600 dark:text-red-400"
+                        >
+                          <UserX className="w-4 h-4 mr-2" />
+                          Unmatch
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {isLoadingMessages ? (
+                    <div className="flex items-center justify-center h-32">
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center py-8">
+                      <div className="max-w-sm mx-auto space-y-4">
+                        <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto">
+                          <MessageCircle className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            Start your conversation
+                          </h3>
+                          <p className="text-gray-600 dark:text-gray-400 mt-2">
+                            Say hello to {selectedMatch.user.name}!
+                            {selectedMatch.user.interests.length > 0 && (
+                              <span>
+                                {" "}
+                                You both like{" "}
+                                {selectedMatch.user.interests[0].toLowerCase()}.
+                              </span>
+                            )}
+                          </p>
+                        </div>
+
+                        {/* Match Info */}
+                        <Card className="text-left">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center space-x-3">
+                              <Avatar className="w-12 h-12">
+                                <AvatarImage src={selectedMatch.user.avatar} />
+                                <AvatarFallback>
+                                  {getInitials(selectedMatch.user.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <p
+                                    className="font-semibold cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                                    onClick={() =>
+                                      navigateToUserProfile(
+                                        selectedMatch.user.id,
+                                        selectedMatch.user.role
+                                      )
+                                    }
+                                  >
+                                    {selectedMatch.user.name}
+                                  </p>
+                                  <ExternalLink
+                                    className="w-4 h-4 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer"
+                                    onClick={() =>
+                                      navigateToUserProfile(
+                                        selectedMatch.user.id,
+                                        selectedMatch.user.role
+                                      )
+                                    }
+                                  />
+                                </div>
+                                {selectedMatch.user.age && (
+                                  <p className="text-sm text-gray-500">
+                                    {selectedMatch.user.age} years old
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {selectedMatch.user.bio && (
+                              <p className="text-sm text-gray-700 dark:text-gray-300">
+                                {selectedMatch.user.bio}
+                              </p>
+                            )}
+
+                            {selectedMatch.user.interests.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                  Interests
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {selectedMatch.user.interests
+                                    .slice(0, 6)
+                                    .map((interest) => (
+                                      <Badge
+                                        key={interest}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        {interest}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((message) => {
+                      const isOwn = message.sender.id === user.id;
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            isOwn ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div className="flex items-start space-x-2 max-w-xs lg:max-w-md">
+                            {!isOwn && (
+                              <Avatar className="w-6 h-6">
+                                <AvatarImage src={message.sender.avatar} />
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(message.sender.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div
+                              className={`px-4 py-2 rounded-lg ${
+                                isOwn
+                                  ? "bg-purple-500 text-white"
+                                  : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                              }`}
+                            >
+                              <p className="text-sm">{message.content}</p>
+                              <span className="text-xs opacity-70">
+                                {new Date(message.createdAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            </div>
+                            {isOwn && (
+                              <Avatar className="w-6 h-6">
+                                <AvatarImage src={user.avatar || undefined} />
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(user.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Message Input */}
+                <div className="p-4 border-t bg-white dark:bg-gray-900">
+                  <div className="flex space-x-2">
+                    <Input
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Type your message..."
+                      disabled={isSending}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim() || isSending}
+                    >
+                      {isSending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </>
+
+              {/* Events Sidebar */}
+              <div className="w-80 border-l bg-gray-50 dark:bg-gray-800/50 flex flex-col">
+                <div className="p-4 border-b">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <Calendar className="h-5 w-5 mr-2 text-purple-500" />
+                    Events in Your Cities
+                  </h2>
+                  {(selectedMatch.currentUserCityId ||
+                    selectedMatch.user.cityId) && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {[
+                        selectedMatch.currentUserCityId,
+                        selectedMatch.user.cityId,
+                      ]
+                        .filter(Boolean)
+                        .filter(
+                          (city, index, arr) => arr.indexOf(city) === index
+                        )
+                        .join(" & ")}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {isLoadingEvents ? (
+                    <div className="flex items-center justify-center h-32">
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No upcoming events in your cities
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {events.map((event: any) => {
+                        const minPrice =
+                          event.packages && event.packages.length > 0
+                            ? Math.min(
+                                ...event.packages.map((pkg: any) =>
+                                  typeof pkg.price === "number"
+                                    ? pkg.price
+                                    : Number(pkg.price) || 0
+                                )
+                              )
+                            : null;
+                        const eventDate = new Date(event.startDate);
+                        const isToday =
+                          eventDate.toDateString() ===
+                          new Date().toDateString();
+
+                        return (
+                          <Card
+                            key={event.id}
+                            className="cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => router.push(`/book/${event.slug}`)}
+                          >
+                            <CardContent className="p-0">
+                              {event.coverImage && (
+                                <div className="relative h-32 w-full overflow-hidden rounded-t-lg">
+                                  <img
+                                    src={event.coverImage}
+                                    alt={event.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              )}
+                              <div className="p-3">
+                                <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-1 line-clamp-2">
+                                  {event.title}
+                                </h3>
+                                <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                                  <div className="flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    {isToday
+                                      ? "Today"
+                                      : eventDate.toLocaleDateString()}{" "}
+                                    {eventDate.toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </div>
+                                  <div className="flex items-center">
+                                    <MapPin className="w-3 h-3 mr-1" />
+                                    <span className="truncate">
+                                      {event.location}
+                                    </span>
+                                  </div>
+                                  {minPrice && (
+                                    <div className="text-purple-600 dark:text-purple-400 font-medium">
+                                      From ₹{minPrice}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center text-gray-500 dark:text-gray-400">

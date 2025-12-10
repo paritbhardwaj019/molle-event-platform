@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import ForgotPasswordForm from "./forgot-password-form";
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [serverError, setServerError] = useState<string>();
@@ -94,6 +95,9 @@ export default function LoginForm() {
       />
     );
   }
+
+  const redirectTarget =
+    searchParams.get("redirectTo") || searchParams.get("redirect");
 
   return (
     <div className="w-full max-w-md space-y-6 bg-white p-8 rounded-lg shadow-lg">
@@ -191,7 +195,7 @@ export default function LoginForm() {
           </CustomGoogleSignInButton>
 
           <div className="relative">
-            <div className="absolute inset-0 flex items-center">
+            <div className="absolute inset-0 flex items_center">
               <div className="w-full border-t border-gray-200" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
@@ -213,7 +217,14 @@ export default function LoginForm() {
 
       <p className="text-center text-sm text-gray-600">
         Don't have an account?{" "}
-        <Link href="/signup" className="text-primary hover:underline">
+        <Link
+          href={
+            redirectTarget
+              ? `/signup?redirectTo=${encodeURIComponent(redirectTarget)}`
+              : "/signup"
+          }
+          className="text-primary hover:underline"
+        >
           Sign up for free
         </Link>
       </p>

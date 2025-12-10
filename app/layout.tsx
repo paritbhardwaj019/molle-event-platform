@@ -1,5 +1,5 @@
-import type React from "react";
-import type { Metadata } from "next";
+import React, { Suspense } from "react";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -10,6 +10,7 @@ import { PWARegistration } from "@/components/pwa-registration";
 import { MobileContentWrapper } from "@/components/mobile-content-wrapper";
 import { PushNotificationProvider } from "@/components/push-notification-provider";
 import { AuthProviderWrapper } from "@/components/providers/auth-provider-wrapper";
+import { MobileLoginGate } from "@/components/mobile-login-gate";
 
 const dmSans = DM_Sans({ subsets: ["latin"] });
 const spaceGrotesk = Space_Grotesk({
@@ -23,7 +24,6 @@ export const metadata: Metadata = {
   description:
     "Discover, host, and manage amazing events with Molle. Connect with people, build communities, and create unforgettable experiences.",
   manifest: "/manifest.json",
-  themeColor: "#8b5cf6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -65,11 +65,12 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#8b5cf6",
 };
 
 export default function RootLayout({
@@ -142,6 +143,10 @@ export default function RootLayout({
         <AuthProviderWrapper>
           <PWARegistration />
           <PWANavigationWrapper />
+          {/* Mobile/PWA login gate overlay */}
+          <Suspense fallback={null}>
+            <MobileLoginGate />
+          </Suspense>
           <MobileContentWrapper>{children}</MobileContentWrapper>
           <MolleSwipesOnboardingWrapper />
           <PWAInstallPrompt />

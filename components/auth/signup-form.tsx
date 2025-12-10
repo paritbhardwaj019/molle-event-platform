@@ -135,13 +135,13 @@ export default function SignupForm({
   };
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full max-w-md mx-auto space-y-6 px-4 sm:px-0">
       {role === "USER" && (
-        <div className="text-center bg-white p-8 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold text-gray-900">
+        <div className="text-center bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
             Create an Account
           </h2>
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-600 mt-2 text-sm sm:text-base">
             Join Molle and start your journey
           </p>
         </div>
@@ -162,7 +162,7 @@ export default function SignupForm({
             text="signup_with"
             theme="outline"
             size="large"
-            width={350}
+            width={320}
             disabled={isGoogleLoading}
           />
         </div>
@@ -348,7 +348,7 @@ export default function SignupForm({
         )}
 
         {/* Terms and Conditions Checkbox */}
-        <div className="flex items-start space-x-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:space-x-3 space-y-2 sm:space-y-0">
           <Checkbox
             id="acceptTerms"
             checked={acceptTerms}
@@ -391,7 +391,7 @@ export default function SignupForm({
       </form>
 
       <p
-        className={`text-center text-sm ${
+        className={`text-center text-sm mt-2 ${
           role !== "USER" ? "text-white/70" : "text-gray-600"
         }`}
       >
