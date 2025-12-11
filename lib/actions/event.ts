@@ -640,9 +640,6 @@ export async function getEventsForDropdown(filterEnabled = false) {
     }
 
     let whereClause: any = {
-      status: {
-        in: [EventStatus.PUBLISHED, EventStatus.DRAFT],
-      },
       ...(filterEnabled ? { enableReferrers: true } : {}),
     };
 

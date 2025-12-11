@@ -17,9 +17,17 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { getHostBookings } from "@/lib/actions/booking";
+import { getEventsForDropdown } from "@/lib/actions/event";
 import { formatPrice } from "@/lib/utils";
 import { BookingTicketsModal } from "./booking-tickets-modal";
-import { Eye, Ticket } from "lucide-react";
+import { Eye, Ticket, Download, Filter } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Booking {
   id: string;
@@ -49,8 +57,16 @@ interface BookingsTableProps {
   showAdminCut?: boolean;
 }
 
+interface EventOption {
+  id: string;
+  title: string;
+  status: string;
+}
+
 export function BookingsTable() {
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(
     null
@@ -58,9 +74,27 @@ export function BookingsTable() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchBookings = async () => {
+    const fetchEvents = async () => {
       try {
-        const result = await getHostBookings();
+        const result = await getEventsForDropdown();
+        if (result.success && result.data) {
+          setEvents(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch events:", error);
+      }
+    };
+
+    fetchEvents();
+  }, []);
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      setIsLoading(true);
+      try {
+        const result = await getHostBookings(
+          selectedEventId === "all" ? undefined : selectedEventId
+        );
         if (result.success && result.data) {
           setBookings(result.data);
         } else {
@@ -75,7 +109,64 @@ export function BookingsTable() {
     };
 
     fetchBookings();
-  }, []);
+  }, [selectedEventId]);
+
+  const handleExportCSV = () => {
+    if (bookings.length === 0) {
+      toast.error("No bookings to export");
+      return;
+    }
+
+    // Define CSV headers
+    const headers = [
+      "Booking ID",
+      "Customer Name",
+      "Customer Email",
+      "Event",
+      "Ticket Count",
+      "Amount",
+      "Status",
+      "Transaction ID",
+      "Booking Date",
+      "Referred By Name",
+      "Referred By Code",
+    ];
+
+    // Format data rows
+    const rows = bookings.map((booking) => [
+      booking.id,
+      booking.customer.name,
+      booking.customer.email,
+      booking.event.title,
+      booking.ticketCount,
+      booking.amount,
+      "CONFIRMED",
+      booking.transactionId || "N/A",
+      format(new Date(booking.paidAt), "yyyy-MM-dd HH:mm:ss"),
+      booking.referredBy?.name || "N/A",
+      booking.referredBy?.code || "N/A",
+    ]);
+
+    // Combine headers and rows
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+
+    // Create download link
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `bookings_${selectedEventId === "all" ? "all" : selectedEventId}_${format(
+        new Date(),
+        "yyyy-MM-dd"
+      )}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleViewTickets = (bookingId: string) => {
     setSelectedBookingId(bookingId);
@@ -146,6 +237,39 @@ export function BookingsTable() {
 
   return (
     <>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <Select
+            value={selectedEventId}
+            onValueChange={setSelectedEventId}
+          >
+            <SelectTrigger className="w-[200px] sm:w-[300px]">
+              <SelectValue placeholder="Filter by event" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Events</SelectItem>
+              {events.map((event) => (
+                <SelectItem key={event.id} value={event.id}>
+                  {event.title}{" "}
+                  <span className="text-gray-400 text-xs">({event.status})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={handleExportCSV}
+          disabled={bookings.length === 0}
+          className="gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
+      </div>
+
       <div className="rounded-lg border border-gray-100 bg-white">
         <Table>
           <TableHeader>

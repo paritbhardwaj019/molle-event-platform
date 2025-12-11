@@ -34,6 +34,9 @@ const preferenceSchema = z.object({
   gender: z
     .enum(["MALE", "FEMALE", "NON_BINARY", "PREFER_NOT_TO_SAY"])
     .optional(),
+  genderPreference: z
+    .array(z.enum(["MALE", "FEMALE", "NON_BINARY", "PREFER_NOT_TO_SAY"]))
+    .optional(),
 });
 
 export async function GET() {

@@ -21,6 +21,7 @@ interface UserMatch {
     showLocation: boolean;
     cityId?: string | null;
     gender?: string | null; // Gender preference from userPreferences
+    genderPreference?: string[];
   } | null;
   interestScore: number;
   likeCount: number;
@@ -143,6 +144,14 @@ export async function GET(request: NextRequest) {
       },
     };
 
+    // Filter by gender preference at the database level if set and not empty
+    if (
+      userPreferences.genderPreference &&
+      userPreferences.genderPreference.length > 0
+    ) {
+      whereClause.gender = { in: userPreferences.genderPreference };
+    }
+
     // Add age filtering if user has birthday
     if (userAge && userPreferences.ageRange) {
       const ageRange = userPreferences.ageRange as { min: number; max: number };
@@ -181,7 +190,8 @@ export async function GET(request: NextRequest) {
             showAge: true,
             showLocation: true,
             cityId: true,
-            gender: true, // Keep gender preference from userPreferences
+            gender: true,
+            genderPreference: true,
           },
         },
 
@@ -213,23 +223,29 @@ export async function GET(request: NextRequest) {
           matchConnectionTypes.includes(type)
         );
 
-        // Check gender preference if user has specified one
-        if (userPreferences.gender && user.gender) {
-          // Current user's gender preference should match other user's actual gender
-          const currentUserPreferenceMatchesOtherUserGender =
-            userPreferences.gender === user.gender;
+        // Check gender preference
+        // 1. Check if current user's preference matches candidate's gender
+        if (
+          userPreferences.genderPreference &&
+          userPreferences.genderPreference.length > 0 &&
+          user.gender
+        ) {
+          if (!userPreferences.genderPreference.includes(user.gender)) {
+            return false;
+          }
+        }
 
-          // Other user's gender preference should match current user's actual gender
-          const otherUserPreferenceMatchesCurrentUserGender =
-            !user.userPreferences?.gender ||
-            (currentUser?.gender &&
-              user.userPreferences.gender === currentUser.gender);
-
-          return (
-            hasConnectionTypeOverlap &&
-            currentUserPreferenceMatchesOtherUserGender &&
-            otherUserPreferenceMatchesCurrentUserGender
-          );
+        // 2. Check if candidate's preference matches current user's gender
+        if (
+          user.userPreferences?.genderPreference &&
+          user.userPreferences.genderPreference.length > 0 &&
+          currentUser?.gender
+        ) {
+          if (
+            !user.userPreferences.genderPreference.includes(currentUser.gender)
+          ) {
+            return false;
+          }
         }
 
         return hasConnectionTypeOverlap;

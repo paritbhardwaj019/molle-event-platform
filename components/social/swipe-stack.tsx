@@ -417,14 +417,17 @@ export function SwipeStack({
                   preventSwipe={["up", "down"]}
                   swipeRequirementType="position"
                   swipeThreshold={100}
-                  className="w-full h-full"
+                  className="w-full h-full relative" // Added relative for positioning stamps
                 >
                   <div
-                    className="w-full h-full select-none"
+                    className="w-full h-full select-none relative group" // Added group for hover effects if needed
                     style={{
-                      scale: 1 - index * 0.02,
-                      opacity: 1 - index * 0.1,
+                      scale: 1 - index * 0.05, // More subtle scaling
+                      opacity: 1 - index * 0.05, // More subtle opacity
+                      y: index * 10, // Slight vertical stack effect
                       touchAction: "none",
+                      transformOrigin: "bottom center",
+                      transition: "all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)",
                     }}
                   >
                     <SwipeCard

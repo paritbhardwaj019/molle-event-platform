@@ -206,7 +206,7 @@ export async function getFeaturedEvents() {
   }
 }
 
-export async function getHostBookings() {
+export async function getHostBookings(eventId?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -242,6 +242,7 @@ export async function getHostBookings() {
       where: {
         event: {
           hostId: user.role === "HOST" ? session.user.id : undefined,
+          id: eventId,
         },
         status: "CONFIRMED",
         OR: [

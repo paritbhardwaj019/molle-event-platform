@@ -695,6 +695,7 @@ model UserPreference {
   updatedAt          DateTime          @updatedAt
   age                Int?
   gender             Gender?
+  genderPreference   Gender[]
   photos             String[]
   user               User              @relation("UserPreferences", fields: [userId], references: [id], onDelete: Cascade)
 

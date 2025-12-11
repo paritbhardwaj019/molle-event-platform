@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Settings,
@@ -36,6 +37,7 @@ import {
   Eye,
   Star,
   Trash2,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CitySearch } from "@/components/ui/city-search";
@@ -84,6 +86,7 @@ interface UserPreferences {
   bio?: string;
   age?: number;
   gender?: string;
+  genderPreference?: string[];
 }
 
 const connectionTypeOptions = [
@@ -179,6 +182,9 @@ function SocialDiscoverPageContent() {
   const [pendingSwipeAction, setPendingSwipeAction] = useState<
     (() => void) | null
   >(null);
+
+  const [showFilterDialog, setShowFilterDialog] = useState(false);
+  const [filterPreferences, setFilterPreferences] = useState<string[]>([]);
 
   // Fetch user preferences
   const fetchPreferences = useCallback(async () => {
@@ -394,6 +400,12 @@ function SocialDiscoverPageContent() {
   const updatePreferences = async (
     newPreferences: Partial<UserPreferences>
   ) => {
+    // Validate minimum 3 photos
+    if (!isSetupComplete && newPreferences.photos && newPreferences.photos.length < 3) {
+      toast.error("Please upload at least 3 photos to complete your profile");
+      return;
+    }
+
     try {
       // Filter out null and undefined values and ensure proper types
       const cleanedPreferences = Object.fromEntries(
@@ -696,6 +708,39 @@ function SocialDiscoverPageContent() {
     }
   }, [searchParams, preferences, router]);
 
+  // Initialize filter preferences from user preferences when they load
+  useEffect(() => {
+    if (preferences?.genderPreference) {
+      setFilterPreferences(preferences.genderPreference);
+    } else {
+      setFilterPreferences([]);
+    }
+  }, [preferences]);
+
+  const handleUpdateFilters = async () => {
+    // Optimistically update UI
+    setPreferences((prev) =>
+      prev ? { ...prev, genderPreference: filterPreferences } : null
+    );
+    setShowFilterDialog(false);
+
+    // Call update API
+    await updatePreferences({ genderPreference: filterPreferences });
+
+    // Refresh users
+    fetchUsers(true);
+  };
+
+  const toggleFilterPreference = (value: string) => {
+    setFilterPreferences((prev) => {
+      if (prev.includes(value)) {
+        return prev.filter((p) => p !== value);
+      } else {
+        return [...prev, value];
+      }
+    });
+  };
+
   if (!user) {
     return <div>Loading...</div>;
   }
@@ -965,6 +1010,37 @@ function SocialDiscoverPageContent() {
               </div>
             </div>
 
+            {/* Gender Preference */}
+            <div className="space-y-2">
+              <Label>Interested In</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {genderOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setPreferences((prev) => {
+                        if (!prev) return null;
+                        const current = prev.genderPreference || [];
+                        const updated = current.includes(option.value)
+                          ? current.filter((g) => g !== option.value)
+                          : [...current, option.value];
+                        return { ...prev, genderPreference: updated };
+                      });
+                    }}
+                    className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                      preferences?.genderPreference?.includes(option.value)
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600"
+                        : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">Select multiple options if needed</p>
+            </div>
+
             {/* Bio */}
             <div className="space-y-2">
               <Label htmlFor="bio">Bio (Optional)</Label>
@@ -983,7 +1059,7 @@ function SocialDiscoverPageContent() {
 
             {/* Profile Photos */}
             <div className="space-y-3">
-              <Label>Profile Photos</Label>
+              <Label>Profile Photos (Min 3)</Label>
               <ProfilePhotosUpload
                 currentPhotos={preferences?.photos || []}
                 onPhotosChange={(photos) =>
@@ -1088,7 +1164,8 @@ function SocialDiscoverPageContent() {
               className="w-full"
               disabled={
                 !preferences?.connectionTypes?.length ||
-                !preferences?.discoverable
+                !preferences?.discoverable ||
+                (preferences?.photos?.length || 0) < 3
               }
             >
               Complete Setup
@@ -1106,6 +1183,22 @@ function SocialDiscoverPageContent() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Swipe Area */}
           <div className="lg:col-span-2">
+            
+            {/* Filter Button (Replacing the bar) */}
+            {isSetupComplete && (
+              <div className="mb-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilterDialog(true)}
+                  className="gap-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filter
+                </Button>
+              </div>
+            )}
+
             <SwipeStack
               users={users}
               onSwipe={handleSwipe}
@@ -1270,6 +1363,39 @@ function SocialDiscoverPageContent() {
                           </button>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Gender Preference */}
+                    <div className="space-y-2">
+                      <Label>Interested In</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {genderOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setDialogPreferences((prev) => {
+                                if (!prev) return null;
+                                const current = prev.genderPreference || [];
+                                const updated = current.includes(option.value)
+                                  ? current.filter((g) => g !== option.value)
+                                  : [...current, option.value];
+                                return { ...prev, genderPreference: updated };
+                              });
+                            }}
+                            className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                              dialogPreferences.genderPreference?.includes(
+                                option.value
+                              )
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600"
+                                : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500">Select multiple options if needed</p>
                     </div>
 
                     {/* Bio */}
@@ -1607,6 +1733,57 @@ function SocialDiscoverPageContent() {
         context="discover"
         onContinue={handleKycDialogContinue}
       />
+
+      {/* Filter Dialog */}
+      <Dialog open={showFilterDialog} onOpenChange={setShowFilterDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Filter className="w-5 h-5 mr-2 text-purple-600" />
+              Discovery Filters
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Choose who you'd like to see in your discover feed
+            </p>
+
+            <div className="space-y-2">
+              <Label>Show Me</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {genderOptions.map((option) => {
+                  const isSelected = filterPreferences.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleFilterPreference(option.value)}
+                      className={`p-3 rounded-lg border-2 text-sm transition-all ${
+                        isSelected
+                          ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600"
+                          : "border-gray-200 dark:border-gray-700 hover:border-purple-300"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-500">Select multiple options if needed</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              className="w-full"
+              onClick={handleUpdateFilters}
+            >
+              Apply Filters
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

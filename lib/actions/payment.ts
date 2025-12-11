@@ -569,23 +569,22 @@ export async function verifyPayment(
           id: ticket.id,
         }));
 
-        // Format event date and time
-        const eventDate = new Date(booking.event.startDate).toLocaleDateString(
-          "en-US",
-          {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          }
+        // Format event date and time in IST
+        const { formatInTimeZone } = await import("date-fns-tz");
+        const startDate = booking.event.startDate instanceof Date
+          ? booking.event.startDate
+          : new Date(booking.event.startDate);
+        
+        const eventDate = formatInTimeZone(
+          startDate,
+          "Asia/Kolkata",
+          "EEEE, MMMM d, yyyy"
         );
 
-        const eventTime = new Date(booking.event.startDate).toLocaleTimeString(
-          "en-US",
-          {
-            hour: "2-digit",
-            minute: "2-digit",
-          }
+        const eventTime = formatInTimeZone(
+          startDate,
+          "Asia/Kolkata",
+          "h:mm a"
         );
 
         // Prepare email data

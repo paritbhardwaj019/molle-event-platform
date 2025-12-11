@@ -2,9 +2,8 @@ import withPWA from "next-pwa";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // turbopack: false, // Removed invalid option for Next.js 16
+  // eslint: { ignoreDuringBuilds: true }, // Removed as per Next.js 16 deprecation
   typescript: {
     ignoreBuildErrors: true,
   },

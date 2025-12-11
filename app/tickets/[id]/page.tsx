@@ -1,6 +1,7 @@
 import { getTicketById } from "@/lib/actions/ticket";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Calendar,
@@ -51,7 +52,13 @@ export default async function TicketPage({ params }: TicketPageProps) {
               <div className="flex items-center gap-4 text-white/90 text-sm">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  {format(new Date(ticket.event.startDate), "PPP")}
+                  {formatInTimeZone(
+                    ticket.event.startDate instanceof Date
+                      ? ticket.event.startDate
+                      : new Date(ticket.event.startDate),
+                    "Asia/Kolkata",
+                    "PPP"
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" />
@@ -159,12 +166,24 @@ export default async function TicketPage({ params }: TicketPageProps) {
                 <div>
                   <p className="text-sm text-gray-500">Event Time</p>
                   <p className="font-medium">
-                    {format(new Date(ticket.event.startDate), "PPP 'at' p")}
+                    {formatInTimeZone(
+                      ticket.event.startDate instanceof Date
+                        ? ticket.event.startDate
+                        : new Date(ticket.event.startDate),
+                      "Asia/Kolkata",
+                      "PPP 'at' p"
+                    )}
                   </p>
                   {ticket.event.endDate && (
                     <p className="text-sm text-gray-600">
                       Ends:{" "}
-                      {format(new Date(ticket.event.endDate), "PPP 'at' p")}
+                      {formatInTimeZone(
+                        ticket.event.endDate instanceof Date
+                          ? ticket.event.endDate
+                          : new Date(ticket.event.endDate),
+                        "Asia/Kolkata",
+                        "PPP 'at' p"
+                      )}
                     </p>
                   )}
                 </div>

@@ -786,7 +786,7 @@ export default function BookingPage() {
                                   )}
                                   {pkg.isFullHouse && (
                                     <Badge className="bg-red-600 text-white whitespace-nowrap">
-                                      FULL HOUSE
+                                      SOLD OUT 🔥
                                     </Badge>
                                   )}
                                   {!pkg.isFullHouse && selected > 0 && (
@@ -837,17 +837,7 @@ export default function BookingPage() {
                               </ul>
                             </div>
 
-                            {pkg.isFullHouse ? (
-                              <div className="mb-6 p-4 bg-red-900/30 border border-red-600/50 rounded-xl text-center">
-                                <div className="text-red-400 font-bold text-lg mb-2">
-                                  FULLY BOOKED
-                                </div>
-                                <div className="text-red-300 text-sm">
-                                  All {pkg.allocation} tickets for this package
-                                  have been sold
-                                </div>
-                              </div>
-                            ) : (
+                            {!pkg.isFullHouse && (
                               <div className="flex items-center justify-between mb-6 p-4 bg-gray-900/50 rounded-xl">
                                 <span className="text-white font-medium text-base">
                                   Quantity
